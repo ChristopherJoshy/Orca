@@ -1,4 +1,5 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
+import { ApiError, apiRequest } from './api';
 import { customerFor, isOverdue, money, outstanding, shortMoney, type Approval, type Invoice, type WorkspaceData, type Money, toPaise, addMoney, ratioMoney } from './model';
 import { Avatar, Badge, Button, Card, EmptyState, PageHeading } from './ui';
 import { Icon } from './icons';
@@ -17,6 +18,7 @@ export type PageActions = {
   sendQuotation: (quotationId: string) => void;
   exportData: () => void;
   downloadExport: (jobId: string) => void;
+  runBilling: () => Promise<number | null>;
   decideApproval: (approval: Approval, decision: 'approve' | 'reject') => void;
   search: string;
   setSearch: (value: string) => void;
@@ -96,7 +98,18 @@ function ChartCard({ data }: { data: WorkspaceData }) {
   </Card>;
 }
 
-export function OverviewPage({ data, actions }: { data: WorkspaceData; actions: PageActions }) {
+export function OverviewPage({ data, actions, canRunBilling }: { data: WorkspaceData; actions: PageActions; canRunBilling: boolean }) {
+  const [billingBusy, setBillingBusy] = useState(false);
+  const [billingMessage, setBillingMessage] = useState('');
+  const runBilling = async () => {
+    setBillingBusy(true);
+    setBillingMessage('');
+    const created = await actions.runBilling();
+    setBillingBusy(false);
+    if (created === null) return;
+    setBillingMessage(created > 0 ? `Generated ${created} draft invoice${created === 1 ? '' : 's'}. Refreshing workspace…` : 'No subscriptions were due for an invoice.');
+    if (created > 0) window.setTimeout(() => window.location.reload(), 800);
+  };
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
   const active = data.subscriptions.filter((sub) => sub.status === 'Active');
@@ -120,7 +133,8 @@ export function OverviewPage({ data, actions }: { data: WorkspaceData; actions: 
   const openWidth = openInvoices / invoiceCount * 100;
   const paidWidth = paidInvoices / invoiceCount * 100;
   return <>
-    <PageHeading eyebrow={new Intl.DateTimeFormat('en-IN', { weekday: 'long', month: 'long', day: 'numeric' }).format(new Date())} title={`${greeting}, Morgan`} description="Here’s what’s happening across your subscription business." actions={<><span className="select-control static-control">This month <Icon name="calendar" size={15} /></span><Button variant="primary" icon="plus" onClick={() => actions.create('quotation')}>Create quotation</Button></>} />
+    <PageHeading eyebrow={new Intl.DateTimeFormat('en-IN', { weekday: 'long', month: 'long', day: 'numeric' }).format(new Date())} title={greeting} description="Here’s what’s happening across your subscription business." actions={<><span className="select-control static-control">This month <Icon name="calendar" size={15} /></span>{canRunBilling && <Button variant="outline" icon="calendar" disabled={billingBusy} onClick={() => void runBilling()}>{billingBusy ? 'Running billing…' : 'Run billing'}</Button>}<Button variant="primary" icon="plus" onClick={() => actions.create('quotation')}>Create quotation</Button></>} />
+    {billingMessage && <p className="billing-run-message" role="status">{billingMessage}</p>}
     <div className="metric-grid">
       <MetricCard label="Monthly recurring revenue" value={shortMoney(mrr)} note="Normalized from active plans" icon="trend" />
       <MetricCard label="Collected this month" value={shortMoney(paid)} note={`${paymentsThisMonth.length} recorded payments`} icon="card" tone="mint" />
@@ -337,7 +351,7 @@ export function TaxesPage({ data, actions }: { data: WorkspaceData; actions: Pag
 
 export function StaffPage({ data, actions }: { data: WorkspaceData; actions: PageActions }) {
   const rows = data.staff.filter((staff) => `${staff.name} ${staff.email} ${staff.role}`.toLowerCase().includes(actions.search.toLowerCase()));
-  return <><PageHeading eyebrow="Business settings" title="Team members" description="Invite internal teammates and keep business access scoped by role." actions={<Button variant="primary" icon="plus" onClick={() => actions.create('staff')}>Invite teammate</Button>} /><Card className="admin-note"><span className="insight-icon"><Icon name="shield" size={18} /></span><div><strong>Only workspace admins can invite staff.</strong><p>Customers sign in through their own portal and cannot see internal business records.</p></div></Card><Card className="staff-list-card"><TableToolbar title="Workspace access" count={`${rows.length} members`} search={actions.search} setSearch={actions.setSearch} /><TableWrap><thead><tr><th>Member</th><th>Role</th><th>Status</th><th>Last activity</th><th><span className="sr-only">Actions</span></th></tr></thead><tbody>{rows.map((member) => <tr key={member.id}><td><div className="person-cell"><Avatar initials={member.initials} size="sm" /><span><strong>{member.name}</strong><small>{member.email}</small></span></div></td><td><Status value={member.role} /></td><td><Status value={member.status} /></td><td>{member.role === 'Admin' ? 'Active now' : member.status === 'Invited' ? 'Invite pending' : 'Today, 10:42 AM'}</td><td>{member.role === 'Admin' ? <span className="muted">You</span> : <button type="button" className="icon-button" aria-label={`More actions for ${member.name}`}><Icon name="more" /></button>}</td></tr>)}</tbody></TableWrap></Card></>;
+  return <><PageHeading eyebrow="Business settings" title="Team members" description="Add employees and keep each person’s business access scoped to this workspace." actions={<Button variant="primary" icon="plus" onClick={() => actions.create('staff')}>Add team member</Button>} /><Card className="admin-note"><span className="insight-icon"><Icon name="shield" size={18} /></span><div><strong>Only workspace admins can add staff.</strong><p>Each employee must first create and verify an ORCA account. Add their verified account email to give them immediate Staff access. This flow does not send invitation email. Customer portal access stays separate from employee access.</p></div></Card><Card className="staff-list-card"><TableToolbar title="Workspace access" count={`${rows.length} members`} search={actions.search} setSearch={actions.setSearch} /><TableWrap><thead><tr><th>Member</th><th>Role</th><th>Status</th><th>Account</th><th><span className="sr-only">Actions</span></th></tr></thead><tbody>{rows.map((member) => <tr key={member.id}><td><div className="person-cell"><Avatar initials={member.initials} size="sm" /><span><strong>{member.name}</strong><small>{member.email}</small></span></div></td><td><Status value={member.role} /></td><td><Status value={member.status} /></td><td>{member.status === 'Active' ? 'Verified ORCA account' : 'Account needs attention'}</td><td>{member.role === 'Admin' ? <span className="muted">You</span> : <button type="button" className="icon-button" aria-label={`More actions for ${member.name}`}><Icon name="more" /></button>}</td></tr>)}</tbody></TableWrap>{rows.length === 0 && <EmptyState icon="users" title="No other team members" description="Add a verified ORCA account to give an employee access to this workspace." action={<Button variant="primary" icon="plus" onClick={() => actions.create('staff')}>Add team member</Button>} />}</Card></>;
 }
 
 export function ExportsPage({ data, actions }: { data: WorkspaceData; actions: PageActions }) {
@@ -345,17 +359,92 @@ export function ExportsPage({ data, actions }: { data: WorkspaceData; actions: P
 }
 
 export function SettingsPage({ actions }: { actions: PageActions }) {
-  return <><PageHeading eyebrow="Business workspace" title="Settings" description="Manage your organization, team access, pricing rules, and data connections." /><div className="settings-grid"><button className="settings-card" type="button" onClick={() => actions.navigate('settings')}><span className="settings-icon"><Icon name="globe" /></span><span><strong>Business profile</strong><small>Company name, region, and currency</small></span><Icon name="arrow" size={16} /></button><button className="settings-card" type="button" onClick={() => actions.navigate('taxes')}><span className="settings-icon"><Icon name="card" /></span><span><strong>Taxes</strong><small>Tax rules and calculation order</small></span><Icon name="arrow" size={16} /></button><button className="settings-card" type="button" onClick={() => actions.navigate('discounts')}><span className="settings-icon"><Icon name="plans" /></span><span><strong>Discounts</strong><small>Promotions, limits, and eligibility</small></span><Icon name="arrow" size={16} /></button><button className="settings-card" type="button" onClick={() => actions.navigate('staff')}><span className="settings-icon"><Icon name="customers" /></span><span><strong>Team members</strong><small>Roles and workspace invitations</small></span><Icon name="arrow" size={16} /></button><button className="settings-card" type="button" onClick={() => actions.navigate('exports')}><span className="settings-icon"><Icon name="download" /></span><span><strong>Data & integrations</strong><small>Exports and provider connections</small></span><Icon name="arrow" size={16} /></button><button className="settings-card" type="button" onClick={() => actions.navigate('exports')}><span className="settings-icon"><Icon name="globe" /></span><span><strong>External MCP</strong><small>Connection scopes and revocation</small></span><Icon name="arrow" size={16} /></button></div><Card className="integration-card"><div><div className="eyebrow">Connections</div><h2>Provider status</h2><p>Payment, email, and AI providers can be configured for this workspace.</p></div><div className="integration-row"><span><i className="provider-mark stripe">S</i><span><strong>Stripe test mode</strong><small>Checkout and payment reconciliation</small></span></span><Badge tone="neutral">Not connected</Badge></div><div className="integration-row"><span><i className="provider-mark mail-provider"><Icon name="mail" size={16} /></i><span><strong>Email delivery</strong><small>Invoices and customer notifications</small></span></span><Badge tone="neutral">Not connected</Badge></div><div className="integration-row"><span><i className="provider-mark ai-provider"><Icon name="spark" size={17} /></i><span><strong>Groq Copilot</strong><small>Optional agent provider</small></span></span><Badge tone="neutral">Not connected</Badge></div><div className="settings-footnote">Unconfigured providers never block manual billing, exports, or record access.</div></Card></>;
+  const [connections, setConnections] = useState<ManagedMCPConnection[]>([]);
+  const [connectionState, setConnectionState] = useState<'loading' | 'ready' | 'forbidden' | 'error'>('loading');
+  const [connectionMessage, setConnectionMessage] = useState('');
+  const [copyMessage, setCopyMessage] = useState('');
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [revokingId, setRevokingId] = useState('');
+  const origin = window.location.origin;
+  const mcpEndpoint = `${origin}/mcp`;
+  const resourceMetadata = `${origin}/.well-known/oauth-protected-resource/mcp`;
+  const authorizationMetadata = `${origin}/.well-known/oauth-authorization-server`;
+
+  useEffect(() => {
+    let active = true;
+    setConnectionState('loading');
+    setConnectionMessage('');
+    void apiRequest<Record<string, unknown>>('/mcp/grants').then((result) => {
+      if (!active) return;
+      const values = Array.isArray(result.items) ? result.items : [];
+      setConnections(values.flatMap((value) => {
+        if (!value || typeof value !== 'object') return [];
+        const record = value as Record<string, unknown>;
+        if (typeof record.id !== 'string' || typeof record.clientId !== 'string') return [];
+        return [{
+          id: record.id,
+          clientId: record.clientId,
+          scopes: Array.isArray(record.scopes) ? record.scopes.filter((scope): scope is string => typeof scope === 'string') : [],
+          expiresAt: typeof record.expiresAt === 'string' ? record.expiresAt : '',
+          revokedAt: typeof record.revokedAt === 'string' ? record.revokedAt : undefined,
+        }];
+      }));
+      setConnectionState('ready');
+    }).catch((error: unknown) => {
+      if (!active) return;
+      if (error instanceof ApiError && error.status === 403) {
+        setConnectionState('forbidden');
+        setConnectionMessage('Only a workspace admin can view or revoke MCP connections.');
+      } else if (error instanceof ApiError && error.status === 401) {
+        setConnectionState('error');
+        setConnectionMessage('Your session expired. Sign in again to manage MCP connections.');
+      } else {
+        setConnectionState('error');
+        setConnectionMessage(error instanceof Error ? error.message : 'Could not load MCP connections.');
+      }
+    });
+    return () => { active = false; };
+  }, [refreshKey]);
+
+  const copyValue = async (value: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopyMessage(`${label} copied.`);
+    } catch {
+      setCopyMessage(`Copy is unavailable here. Select and copy: ${value}`);
+    }
+  };
+
+  const revokeConnection = async (connection: ManagedMCPConnection) => {
+    const accepted = window.confirm(`Revoke MCP access for ${connection.clientId}? The client will lose access to this ORCA workspace.`);
+    if (!accepted) return;
+    setRevokingId(connection.id);
+    setConnectionMessage('');
+    try {
+      await apiRequest(`/mcp/grants/${encodeURIComponent(connection.id)}`, { method: 'DELETE' });
+      setConnections((items) => items.map((item) => item.id === connection.id ? { ...item, revokedAt: new Date().toISOString() } : item));
+      setConnectionMessage(`Access revoked for ${connection.clientId}.`);
+    } catch (error) {
+      setConnectionMessage(error instanceof Error ? error.message : 'Could not revoke this MCP connection.');
+    } finally {
+      setRevokingId('');
+    }
+  };
+
+  const jumpToMCP = () => document.getElementById('external-mcp')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  return <><PageHeading eyebrow="Business workspace" title="Settings" description="Manage your organization, team access, pricing rules, and external connections." /><div className="settings-grid"><button className="settings-card" type="button" onClick={() => actions.navigate('settings')}><span className="settings-icon"><Icon name="globe" /></span><span><strong>Business profile</strong><small>Company name, region, and currency</small></span><Icon name="arrow" size={16} /></button><button className="settings-card" type="button" onClick={() => actions.navigate('taxes')}><span className="settings-icon"><Icon name="card" /></span><span><strong>Taxes</strong><small>Tax rules and calculation order</small></span><Icon name="arrow" size={16} /></button><button className="settings-card" type="button" onClick={() => actions.navigate('discounts')}><span className="settings-icon"><Icon name="plans" /></span><span><strong>Discounts</strong><small>Promotions, limits, and eligibility</small></span><Icon name="arrow" size={16} /></button><button className="settings-card" type="button" onClick={() => actions.navigate('staff')}><span className="settings-icon"><Icon name="users" /></span><span><strong>Team members</strong><small>Add employees with verified ORCA accounts</small></span><Icon name="arrow" size={16} /></button><button className="settings-card" type="button" onClick={() => actions.navigate('exports')}><span className="settings-icon"><Icon name="download" /></span><span><strong>Data exports</strong><small>Portable business records and invoice evidence</small></span><Icon name="arrow" size={16} /></button><button className="settings-card" type="button" onClick={jumpToMCP}><span className="settings-icon"><Icon name="plug" /></span><span><strong>External MCP</strong><small>Connect instructions, scopes, and revocation</small></span><Icon name="arrow" size={16} /></button></div><Card className="integration-card"><div><div className="eyebrow">Connections</div><h2>Provider status</h2><p>Payment, email, and AI providers can be configured for this workspace.</p></div><div className="integration-row"><span><i className="provider-mark stripe">S</i><span><strong>Stripe test mode</strong><small>Checkout and payment reconciliation</small></span></span><Badge tone="neutral">Configured by owner</Badge></div><div className="integration-row"><span><i className="provider-mark mail-provider"><Icon name="mail" size={16} /></i><span><strong>Email delivery</strong><small>Invoices and customer notifications</small></span></span><Badge tone="neutral">Configured by owner</Badge></div><div className="integration-row"><span><i className="provider-mark ai-provider"><Icon name="spark" size={17} /></i><span><strong>Groq Copilot</strong><small>Optional agent provider</small></span></span><Badge tone="neutral">Configured by owner</Badge></div><div className="settings-footnote">Provider health and credentials are managed by the workspace owner; ORCA never displays secret values.</div></Card><section id="external-mcp"><Card className="integration-card mcp-integration-card"><div><div className="eyebrow">External Model Context Protocol</div><h2>Connect an MCP client</h2><p>Use OAuth discovery with this Streamable HTTP endpoint. The client opens ORCA for sign-in and consent; no API token is copied into the client manually.</p></div><div className="mcp-endpoint-row"><code>{mcpEndpoint}</code><Button variant="outline" size="sm" icon="plug" onClick={() => void copyValue(mcpEndpoint, 'MCP endpoint')}>Copy endpoint</Button></div>{copyMessage && <p className="form-hint" role="status">{copyMessage}</p>}<div className="mcp-setup"><h3>How to connect</h3><ol><li>In an MCP client that supports OAuth discovery and Streamable HTTP, add a remote server using the endpoint above.</li><li>When the client starts OAuth, ORCA displays the requested access scopes. Sign in and approve only the access the client needs.</li><li>Return to the client to finish setup. Authorized grants appear in the connection list below.</li></ol></div><div className="mcp-discovery-links"><span>Resource metadata <a href={resourceMetadata} target="_blank" rel="noreferrer">{resourceMetadata}</a></span><span>Authorization metadata <a href={authorizationMetadata} target="_blank" rel="noreferrer">{authorizationMetadata}</a></span></div><div className="mcp-scope-list"><strong>Available scopes</strong><div><Badge tone="blue">records:read</Badge><Badge tone="blue">reports:read</Badge><Badge tone="blue">billing:simulate</Badge><Badge tone="amber">actions:propose</Badge></div><small>External clients can read, explain, simulate, and propose supported actions. Mutations still require review inside ORCA.</small></div><div className="mcp-connection-heading"><div><h3>Authorized connections</h3><p>Revoking a grant blocks future MCP requests for this workspace.</p></div><Button variant="outline" size="sm" onClick={() => setRefreshKey((key) => key + 1)} disabled={connectionState === 'loading'}>Refresh</Button></div>{connectionState === 'loading' && <p className="empty-inline" role="status">Loading authorized MCP connections…</p>}{connectionState === 'forbidden' && <p className="empty-inline" role="status">{connectionMessage}</p>}{connectionState === 'error' && <div className="empty-inline"><p role="alert">{connectionMessage}</p><Button variant="outline" size="sm" onClick={() => setRefreshKey((key) => key + 1)}>Try again</Button></div>}{connectionMessage && connectionState === 'ready' && <p className="form-hint" role="status">{connectionMessage}</p>}{connectionState === 'ready' && connections.length === 0 && <p className="empty-inline">No MCP clients have authorized this workspace yet.</p>}{connectionState === 'ready' && connections.length > 0 && <div className="table-scroll" role="group" tabIndex={0} aria-label="Authorized MCP connections"><table className="data-table"><thead><tr><th>Client ID</th><th>Scopes</th><th>Expires</th><th>Status</th><th><span className="sr-only">Actions</span></th></tr></thead><tbody>{connections.map((connection) => { const expired = connection.expiresAt ? new Date(connection.expiresAt).getTime() <= Date.now() : true; const state = connection.revokedAt ? 'Revoked' : expired ? 'Expired' : 'Active'; return <tr key={connection.id}><td><code>{connection.clientId}</code></td><td>{connection.scopes.length ? connection.scopes.join(', ') : 'No scopes recorded'}</td><td>{connection.expiresAt ? dateFmt(connection.expiresAt) : '—'}</td><td><Badge tone={state === 'Active' ? 'green' : state === 'Expired' ? 'amber' : 'neutral'}>{state}</Badge></td><td>{state === 'Active' ? <Button variant="outline" size="sm" disabled={revokingId === connection.id} onClick={() => void revokeConnection(connection)}>{revokingId === connection.id ? 'Revoking…' : 'Revoke'}</Button> : <span className="muted">—</span>}</td></tr>; })}</tbody></table></div>}</Card></section></>;
 }
 
-export function CopilotPage({ data, messages, onSend, actions, busy = false, canRun = false, canReview = false, previewMode = false }: {
+type ManagedMCPConnection = { id: string; clientId: string; scopes: string[]; expiresAt: string; revokedAt?: string };
+
+export function CopilotPage({ data, messages, onSend, actions, busy = false, canRun = false, canReview = false }: {
   data: WorkspaceData; messages: { id: string; role: 'user' | 'assistant'; text: string; time: string }[];
-  onSend: (prompt: string) => void; actions: PageActions; busy?: boolean; canRun?: boolean; canReview?: boolean; previewMode?: boolean;
+  onSend: (prompt: string) => void; actions: PageActions; busy?: boolean; canRun?: boolean; canReview?: boolean;
 }) {
   const [prompt, setPrompt] = useState('');
   const pending = data.approvals.filter((approval) => approval.status === 'Needs review');
   const resolved = data.approvals.filter((approval) => approval.status !== 'Needs review').slice(0, 4);
-  const visibleApprovals = canReview || previewMode ? pending : [];
+  const visibleApprovals = canReview ? pending : [];
   const submit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const value = prompt.trim();
@@ -369,8 +458,8 @@ export function CopilotPage({ data, messages, onSend, actions, busy = false, can
       <Card className="chat-card">
         <div className="chat-header">
           <span className="copilot-avatar"><Icon name="spark" size={19} /></span>
-          <span><strong>ORCA Copilot</strong><small>{canRun ? 'Connected to the signed-in workspace' : 'Sign in to connect Copilot to a workspace'}</small></span>
-          <Badge tone={canRun ? 'green' : 'neutral'}>{canRun ? 'Available' : previewMode ? 'Preview' : 'Unavailable'}</Badge>
+          <span><strong>ORCA Copilot</strong><small>{canRun ? 'Connected to the signed-in workspace' : 'AI service is not configured or is unavailable'}</small></span>
+          <Badge tone={canRun ? 'green' : 'neutral'}>{canRun ? 'Available' : 'Unavailable'}</Badge>
         </div>
         <div className="chat-messages" aria-live="polite">
           {messages.map((message) => <div key={message.id} className={`chat-message ${message.role === 'user' ? 'user-message' : 'assistant-message'}`}><div className="chat-bubble">{message.text}</div><small>{message.time}</small></div>)}
@@ -384,10 +473,10 @@ export function CopilotPage({ data, messages, onSend, actions, busy = false, can
         </div>
         <form className="chat-input-row" onSubmit={submit}>
           <label className="sr-only" htmlFor="copilot-prompt">Ask ORCA Copilot</label>
-          <input id="copilot-prompt" value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder={canRun ? 'Ask ORCA to help with your billing…' : 'Sign in to run Copilot'} disabled={!canRun || busy} />
+          <input id="copilot-prompt" value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder={canRun ? 'Ask ORCA to help with your billing…' : 'Copilot is unavailable right now'} disabled={!canRun || busy} />
           <Button variant="primary" type="submit" ariaLabel="Send prompt" icon="arrow" disabled={!canRun || !prompt.trim() || busy} />
         </form>
-        <p className="chat-disclaimer">Copilot reads records, explains invoices, simulates upcoming bills, and prepares action proposals. Approved proposals execute only after the server rechecks access and record versions. No prompt is sent in preview mode.</p>
+        <p className="chat-disclaimer">Copilot reads records, explains invoices, simulates upcoming bills, and prepares action proposals. Approved proposals execute only after the server rechecks access and record versions. Prompts are sent only when the configured AI service is available.</p>
       </Card>
       <div className="copilot-side">
         <Card>
@@ -396,12 +485,12 @@ export function CopilotPage({ data, messages, onSend, actions, busy = false, can
             <span className="approval-count">{visibleApprovals.length}</span>
           </div>
           {visibleApprovals.length === 0
-            ? <EmptyState icon="shield" title={canReview ? 'All caught up' : previewMode ? 'Sample proposals' : 'No review requests available'} description={previewMode ? 'Preview proposals are illustrative only and cannot be approved or rejected.' : canReview ? 'New proposals will appear here for review.' : 'Sign in with a role that can review workspace proposals.'} />
+            ? <EmptyState icon="shield" title={canReview ? 'All caught up' : 'Review access required'} description={canReview ? 'New proposals will appear here for review.' : 'A workspace admin or staff member can review action proposals.'} />
             : <div className="approval-list">{visibleApprovals.map((approval) => {
               const invoice = data.invoices.find((item) => item.id === approval.target || item.number === approval.target);
               const subscription = data.subscriptions.find((item) => item.id === approval.target || item.number === approval.target);
               return <article className="approval-card" key={approval.id}>
-                <div className="approval-top"><Badge tone="amber">{previewMode ? 'Sample' : approval.status}</Badge><span>{approval.createdAt}</span></div>
+                <div className="approval-top"><Badge tone="amber">{approval.status}</Badge><span>{approval.createdAt}</span></div>
                 <h3>{approval.title}</h3><p>{approval.detail}</p>
                 <div className="approval-target"><span>Action</span><strong>{approval.action}</strong><span>Target</span>
                   <button type="button" className="link-button" onClick={() => { if (invoice) actions.navigate('invoice', invoice.id); else if (subscription) actions.navigate('subscriptions'); }}>{approval.target}</button>
@@ -441,12 +530,18 @@ export function CopilotPage({ data, messages, onSend, actions, busy = false, can
 }
 
 export function PortalPage({ data, actions, isCustomer, canPayOnline }: { data: WorkspaceData; actions: PageActions; isCustomer: boolean; canPayOnline: boolean }) {
+  if (!isCustomer) {
+    return <><PageHeading eyebrow="Customer portal" title="Customer access required" description="Sign in with a customer portal account to view subscriptions, invoices, and payments." /><EmptyState icon="shield" title="This account is not linked to a customer" description="Ask the business to create a customer record with this account’s email, then use customer portal access." /></>;
+  }
   const customer = data.customers[0];
+  if (!customer) {
+    return <><PageHeading eyebrow="Customer portal" title="Customer record unavailable" description="This account does not have a customer record linked in the current business." /><EmptyState icon="customers" title="No linked customer record" description="Contact the business workspace admin to verify your portal access." /></>;
+  }
   const subscriptions = data.subscriptions.filter((sub) => sub.customerId === customer?.id && ['Active', 'Paused'].includes(sub.status));
   const invoices = data.invoices.filter((invoice) => invoice.customerId === customer?.id);
   return <>
-    <PageHeading eyebrow={isCustomer ? 'Customer portal' : 'Customer portal · preview'} title={`Welcome, ${customer?.name ?? 'Customer'}`} description="A focused view of your own subscriptions, invoices, and payments." actions={<Badge tone="blue">{isCustomer ? 'Your account' : 'Customer preview'}</Badge>} />
-    <div className="portal-banner"><span className="portal-brand"><Icon name="overview" size={17} />Brightloop</span><span>{customer?.email ?? 'customer@example'}</span></div>
+    <PageHeading eyebrow="Customer portal" title={`Welcome, ${customer.name}`} description="A focused view of your own subscriptions, invoices, and payments." actions={<Badge tone="blue">Your account</Badge>} />
+    <div className="portal-banner"><span className="portal-brand"><Icon name="overview" size={17} />{customer.company || 'Customer portal'}</span><span>{customer.email}</span></div>
     <div className="compact-stats">
       <Card><span>Active subscriptions</span><strong>{subscriptions.filter((sub) => sub.status === 'Active').length}</strong></Card>
       <Card><span>Open balance</span><strong className="small-stat-money">{money(invoices.filter((invoice) => invoice.status === 'Confirmed').reduce((sum, invoice) => addMoney(sum, outstanding(invoice)), '0.00' as Money))}</strong></Card>

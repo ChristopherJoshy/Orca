@@ -518,7 +518,7 @@ func (a *API) inviteStaff(w http.ResponseWriter, r *http.Request, auth Authentic
 			}
 		}
 		if user.ID == "" {
-			return fmt.Errorf("%w: invitees must first create and verify an account", ErrValidation)
+			return fmt.Errorf("%w: team members must first create and verify an ORCA account", ErrValidation)
 		}
 		key := membershipKey(auth.Actor.BusinessID, user.ID)
 		if old, ok := st.Memberships[key]; ok && old.RevokedAt == nil {

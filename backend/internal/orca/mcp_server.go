@@ -334,7 +334,11 @@ func (g *mcpGateway) listGrants(w http.ResponseWriter, r *http.Request, authn Au
 	items := []OAuthGrant{}
 	err := g.api.Store.ReadFor(r.Context(), authn.Actor.BusinessID, func(st *State) error {
 		for _, v := range st.OAuthGrants {
-			items = append(items, v)
+			// Grants without a token hash are metadata records, not authorized
+			// clients, and must not appear as connections in Settings.
+			if v.TokenHash != "" {
+				items = append(items, v)
+			}
 		}
 		return nil
 	})

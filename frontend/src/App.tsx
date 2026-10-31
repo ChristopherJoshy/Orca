@@ -104,8 +104,8 @@ function CreateRecordDialog({ kind, data, onClose, onSave }: {
   const [busy, setBusy] = useState(false);
   const set = (key: string, value: string | boolean) => setValues((current) => ({ ...current, [key]: value }));
   const v = (key: string) => String(values[key] ?? '');
-  const title: Record<typeof kind, string> = { customer: 'Add a customer', product: 'Add a product', plan: 'Create a plan', quotation: 'Prepare a quotation', subscription: 'New subscription', discount: 'Create discount', staff: 'Add a staff member', tax: 'Add tax rule' };
-  const subtitle: Record<typeof kind, string> = { customer: 'Add a customer record to your workspace.', product: 'Set a base price and optional additive variant.', plan: 'Define billing frequency and lifecycle permissions.', quotation: 'Choose a customer and plan, then set the offer validity.', subscription: 'Create a draft subscription for a customer.', discount: 'Set eligibility, scope, and a usage limit.', staff: 'Add an existing, verified ORCA account to this workspace.', tax: 'Configure a tax rate for eligible invoice lines.' };
+  const title: Record<typeof kind, string> = { customer: 'Add a customer', product: 'Add a product', plan: 'Create a plan', quotation: 'Prepare a quotation', subscription: 'New subscription', discount: 'Create discount', staff: 'Add verified ORCA account', tax: 'Add tax rule' };
+  const subtitle: Record<typeof kind, string> = { customer: 'Add a customer record to your workspace.', product: 'Set a base price and optional additive variant.', plan: 'Define billing frequency and lifecycle permissions.', quotation: 'Choose a customer and plan, then set the offer validity.', subscription: 'Create a draft subscription for a customer.', discount: 'Set eligibility, scope, and a usage limit.', staff: 'The teammate must create an ORCA account and verify this email before you can add them.', tax: 'Configure a tax rate for eligible invoice lines.' };
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault(); setBusy(true);
     const saved = await onSave(values);
@@ -125,7 +125,7 @@ function CreateRecordDialog({ kind, data, onClose, onSave }: {
       {kind === 'quotation' && <div className="form-grid">{text('Quotation title', 'title', 'text', 'e.g. Core monthly offer')}{select('Customer', 'customerId', customerOptions)}{select('Plan', 'planId', planOptions)}{text(`Quantity · minimum ${selectedPlanMinimum}`, 'quantity', 'number', String(selectedPlanMinimum), true, String(selectedPlanMinimum), '1')}{text('Valid for (days)', 'validDays', 'number', '14', true, '1', '1')}</div>}
       {kind === 'subscription' && <div className="form-grid">{select('Customer', 'customerId', customerOptions)}{select('Plan', 'planId', planOptions)}{text(`Quantity · minimum ${selectedPlanMinimum}`, 'quantity', 'number', String(selectedPlanMinimum), true, String(selectedPlanMinimum), '1')}{select('Payment terms', 'paymentTerms', [{ label: 'Due on receipt', value: '0' }, { label: 'Net 15', value: '15' }, { label: 'Net 30', value: '30' }])}{text('Start date', 'availableFrom', 'date')}</div>}
       {kind === 'discount' && <div className="form-grid">{text('Discount name', 'name', 'text', 'Annual commitment')}{select('Discount type', 'discountKind', [{ label: 'Percentage', value: 'Percentage' }, { label: 'Fixed amount', value: 'Fixed' }])}{text(values.discountKind === 'Fixed' ? 'Amount · INR' : 'Percentage off', 'value', 'number', values.discountKind === 'Fixed' ? '1500.00' : '10', true, '0', '0.01')}{select('Applies to', 'scope', [{ label: 'Entire subscription', value: 'Subscriptions' }, ...data.products.map((product) => ({ label: product.name, value: product.id }))])}{text('Minimum purchase · INR', 'minimum', 'number', '0.00', true, '0', '0.01')}{text('Minimum quantity', 'minimumQuantity', 'number', '1', true, '1', '1')}{text('Usage limit', 'usageLimit', 'number', '25', true, '1', '1')}{text('Valid through', 'endsAt', 'date')}</div>}
-      {kind === 'staff' && <div className="form-grid">{text('Verified ORCA account email', 'email', 'email', 'sam@company.example')}</div>}
+      {kind === 'staff' && <div className="form-grid">{text('Teammate name', 'name', 'text', 'Sam Patel')}{text('Email on the verified ORCA account', 'email', 'email', 'teammate@company.com')}<p className="form-hint">Ask your teammate to create an ORCA account and verify this exact email first. Adding them grants staff access to this workspace.</p></div>}
       {kind === 'tax' && <div className="form-grid">{text('Tax name', 'name', 'text', 'GST')}{text('Region or treatment', 'region', 'text', 'India · Standard rated')}{text('Rate (%)', 'rate', 'number', '18', true, '0', '0.01')}</div>}
       <FormActions onCancel={onClose} submit={kind === 'staff' ? 'Add staff member' : kind === 'quotation' ? 'Prepare quotation' : kind === 'subscription' ? 'Create draft' : 'Save'} disabled={busy} />
     </Form>
@@ -153,30 +153,119 @@ function PaymentDialog({ invoice, customer, onClose, onSave }: { invoice: Invoic
   </Dialog>;
 }
 
-function SignInDialog({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
-  const [mode, setMode] = useState<'login' | 'signup' | 'customer'>('login');
-  const [email, setEmail] = useState(''); const [password, setPassword] = useState(''); const [business, setBusiness] = useState('');
-  const [error, setError] = useState(''); const [busy, setBusy] = useState(false);
+type AuthMode = 'login' | 'signup' | 'customer' | 'forgot' | 'reset';
+
+function AuthScreen({ apiState, connectionError, onRetry, onAuthenticated }: { apiState: 'checking' | 'online' | 'offline'; connectionError: string; onRetry: () => void; onAuthenticated: () => void }) {
+  const [mode, setMode] = useState<AuthMode>('login');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [business, setBusiness] = useState('');
+  const [resetToken, setResetToken] = useState('');
+  const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+  const [busy, setBusy] = useState(false);
+  const queryTokenHandled = useRef(false);
+
+  useEffect(() => {
+    if (queryTokenHandled.current) return;
+    if (apiState === 'checking') return;
+    const params = new URLSearchParams(window.location.search);
+    const verifyToken = params.get('verify');
+    const passwordToken = params.get('reset');
+    if (!verifyToken && !passwordToken) return;
+    if (apiState !== 'online') {
+      setError('ORCA cannot reach the API yet. Retry the connection to continue with this secure link.');
+      return;
+    }
+    queryTokenHandled.current = true;
+    window.history.replaceState({}, '', window.location.pathname || '/');
+    if (passwordToken) {
+      setResetToken(passwordToken);
+      setMode('reset');
+      setNotice('Choose a new password for your ORCA account.');
+      return;
+    }
+    setBusy(true);
+    void apiRequest('/auth/verify-email', { method: 'POST', body: JSON.stringify({ token: verifyToken }) })
+      .then(() => onAuthenticated())
+      .catch((reason) => setError(reason instanceof Error ? reason.message : 'This verification link is invalid or expired.'))
+      .finally(() => setBusy(false));
+  }, [apiState, onAuthenticated]);
+
   const submit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault(); setError(''); setBusy(true);
+    event.preventDefault();
+    setError(''); setNotice(''); setBusy(true);
     try {
-      const requestBody = mode === 'login' ? { email, password } : mode === 'customer' ? { email, password, businessId: business.trim() } : { email, password, businessName: business };
-      const result = await apiRequest<Record<string, unknown>>(mode === 'login' ? '/auth/login' : '/auth/signup', { method: 'POST', body: JSON.stringify(requestBody) });
-      if (mode !== 'login') {
-        if (typeof result.csrfToken === 'string') { setBusy(false); onDone(); return; }
-        const emailSent = result.emailSent === true;
-        setError(mode === 'customer'
-          ? emailSent ? 'If the business has a matching customer record, check your email for the verification link.' : 'If the business has a matching customer record, ORCA will send verification when email delivery is configured.'
-          : emailSent ? 'Account created. Check your email for the verification link before signing in.' : 'Account created, but email delivery is not configured in this environment.');
-        setBusy(false); return;
+      if (mode === 'forgot') {
+        await apiRequest('/auth/password-reset', { method: 'POST', body: JSON.stringify({ email }) });
+        setNotice('If that account can receive email, password reset instructions are on the way.');
+      } else if (mode === 'reset') {
+        await apiRequest('/auth/password-reset/complete', { method: 'POST', body: JSON.stringify({ token: resetToken, password }) });
+        setMode('login'); setPassword(''); setNotice('Password updated. Sign in with your new password.');
+      } else {
+        const requestBody = mode === 'login' ? { email, password } : mode === 'customer' ? { email, password, businessId: business.trim() } : { email, password, businessName: business.trim() };
+        const result = await apiRequest<Record<string, unknown>>(mode === 'login' ? '/auth/login' : '/auth/signup', { method: 'POST', body: JSON.stringify(requestBody) });
+        if (typeof result.csrfToken === 'string') { onAuthenticated(); return; }
+        if (mode === 'customer') {
+          setNotice('If the business has a matching customer record, ORCA will send an email verification link.');
+        } else {
+          setNotice(result.emailSent === true
+            ? 'Account created. Open the verification email to finish signing in.'
+            : 'Account created. Email verification must be configured before this account can sign in.');
+        }
       }
-      setBusy(false); onDone();
-    } catch (e) { setBusy(false); setError(e instanceof Error ? e.message : 'The account request could not be completed.'); }
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'ORCA could not complete this request. Please try again.');
+    } finally {
+      setBusy(false);
+    }
   };
-  const dialogTitle = mode === 'login' ? 'Sign in to ORCA' : mode === 'customer' ? 'Create customer portal access' : 'Create your workspace';
-  return <Dialog title={dialogTitle} description="Your records stay scoped to the business and account you join." onClose={onClose}>
-    <Form onSubmit={submit}>{mode === 'signup' && <TextField label="Business name" name="business-name" value={business} onChange={setBusiness} placeholder="Brightloop Software" required />}{mode === 'customer' && <TextField label="Business ID" name="business-id" value={business} onChange={setBusiness} placeholder="From your customer invitation" required />}<TextField label="Email address" name="account-email" type="email" value={email} onChange={setEmail} placeholder="you@company.example" required /><TextField label="Password" name="account-password" type="password" value={password} onChange={setPassword} placeholder="At least 9 characters" required /><div className="auth-note">Use at least 9 characters with uppercase, lowercase, and a special character.</div>{error && <p className="form-error" role="alert">{error}</p>}<div className="form-actions">{mode === 'login' ? <><button type="button" className="text-button" onClick={() => { setMode('signup'); setError(''); }}>Create a business workspace</button><button type="button" className="text-button" onClick={() => { setMode('customer'); setError(''); }}>Customer portal access</button></> : <button type="button" className="text-button" onClick={() => { setMode('login'); setError(''); }}>Back to sign in</button>}<Button variant="primary" type="submit" disabled={busy}>{busy ? 'Please wait…' : mode === 'login' ? 'Sign in' : mode === 'customer' ? 'Join customer portal' : 'Create workspace'}</Button></div></Form>
-  </Dialog>;
+
+  const isLoading = apiState === 'checking';
+  const title = mode === 'login' ? 'Welcome back.' : mode === 'signup' ? 'Start with a clear view.' : mode === 'customer' ? 'Access your account.' : mode === 'forgot' ? 'Reset your password.' : 'Choose a new password.';
+  const description = mode === 'login' ? 'Sign in to your billing workspace.' : mode === 'signup' ? 'Create a business workspace with your first admin account.' : mode === 'customer' ? 'Link a verified email to your customer record.' : mode === 'forgot' ? 'We’ll send a secure reset link if the account can receive email.' : 'Use a strong password to secure your account.';
+  const inputDisabled = busy || isLoading || apiState === 'offline' || Boolean(connectionError);
+
+  return <main className="auth-page">
+    <section className="auth-story" aria-label="About ORCA">
+      <div className="auth-story-orbit orbit-one" /><div className="auth-story-orbit orbit-two" />
+      <div className="auth-story-inner">
+        <div className="auth-brand"><span className="auth-brand-mark"><Icon name="overview" size={21} /></span><span className="auth-brand-name">orca</span><span className="auth-brand-divider" /><span className="auth-brand-caption">BILLING WORKSPACE</span></div>
+        <div className="auth-story-copy"><span className="auth-eyebrow"><i /> SUBSCRIPTION OPERATIONS</span><h1>Every cycle,<br /><em>accounted for.</em></h1><p>Reliable recurring billing, explainable invoices, and a workspace that keeps every number connected to its source.</p>
+          <div className="auth-feature-list"><div><span><Icon name="invoices" size={17} /></span><strong>Invoice Truth</strong><small>See how every total was calculated.</small></div><div><span><Icon name="reports" size={17} /></span><strong>Billing Control Tower</strong><small>Understand what needs attention.</small></div><div><span><Icon name="spark" size={17} /></span><strong>ORCA Copilot</strong><small>Move work forward with review built in.</small></div></div>
+        </div>
+        <div className="auth-story-footer"><span>Private by workspace</span><span>INR billing</span><span>Audit-ready records</span></div>
+      </div>
+    </section>
+    <section className="auth-main" aria-labelledby="auth-title">
+      <div className="auth-card">
+        <div className="auth-card-top"><span className="auth-card-mark"><Icon name={mode === 'login' ? 'shield' : mode === 'signup' ? 'plus' : 'mail'} size={18} /></span><span>{mode === 'login' ? 'SECURE SIGN IN' : mode === 'signup' ? 'NEW WORKSPACE' : mode === 'customer' ? 'CUSTOMER PORTAL' : 'ACCOUNT RECOVERY'}</span></div>
+        <h2 id="auth-title">{title}</h2><p className="auth-description">{description}</p>
+        {isLoading && <div className="auth-connection" role="status"><span className="auth-spinner" />Checking your secure workspace connection…</div>}
+        {!isLoading && apiState === 'offline' && <div className="auth-connection auth-connection-error" role="alert"><Icon name="close" size={17} /><span>{connectionError || 'ORCA could not reach the API. Start the backend and database, then try again.'}</span><button type="button" onClick={onRetry}>Retry</button></div>}
+        {!isLoading && apiState === 'online' && connectionError && <div className="auth-connection auth-connection-error" role="alert"><Icon name="close" size={17} /><span>{connectionError}</span><button type="button" onClick={onRetry}>Retry</button></div>}
+        {!['forgot', 'reset'].includes(mode) && <div className="auth-mode-tabs" role="group" aria-label="Account type"><button type="button" aria-pressed={mode === 'login'} onClick={() => { setMode('login'); setError(''); setNotice(''); }}>Sign in</button><button type="button" aria-pressed={mode === 'signup'} onClick={() => { setMode('signup'); setError(''); setNotice(''); }}>Create workspace</button></div>}
+        {mode === 'customer' && <div className="auth-context-note">Customer portal access is connected by your business and verified account email.</div>}
+        <form className="auth-form" onSubmit={submit}>
+          {mode === 'signup' && <label className="auth-field"><span>Business name</span><input name="businessName" autoComplete="organization" value={business} onChange={(event) => setBusiness(event.target.value)} placeholder="Your company" required disabled={inputDisabled} /></label>}
+          {mode === 'customer' && <label className="auth-field"><span>Business ID</span><input name="businessId" value={business} onChange={(event) => setBusiness(event.target.value)} placeholder="From your invoice or invitation" required disabled={inputDisabled} /></label>}
+          {mode !== 'reset' && <label className="auth-field"><span>Email address</span><input name="email" type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@company.com" required disabled={inputDisabled} /></label>}
+          {mode !== 'forgot' && <label className="auth-field"><span>{mode === 'reset' ? 'New password' : 'Password'}{mode !== 'reset' && mode !== 'login' && <small>At least 9 characters</small>}</span><input name="password" type="password" autoComplete={mode === 'login' ? 'current-password' : 'new-password'} value={password} onChange={(event) => setPassword(event.target.value)} placeholder={mode === 'login' ? 'Enter your password' : 'Use uppercase, lowercase, and a special character'} minLength={mode === 'login' ? undefined : 9} required disabled={inputDisabled} /></label>}
+          {mode !== 'login' && mode !== 'forgot' && mode !== 'reset' && <p className="auth-password-hint">Use at least 9 characters with uppercase, lowercase, and a special character.</p>}
+          {error && <p className="auth-message auth-message-error" role="alert">{error}</p>}
+          {notice && <p className="auth-message auth-message-success" role="status">{notice}</p>}
+          <button className="auth-submit" type="submit" disabled={inputDisabled}>{busy ? <><span className="auth-spinner" />{mode === 'login' ? 'Signing in…' : 'Please wait…'}</> : mode === 'login' ? <>Sign in <Icon name="arrow" size={17} /></> : mode === 'signup' ? <>Create workspace <Icon name="arrow" size={17} /></> : mode === 'customer' ? <>Continue <Icon name="arrow" size={17} /></> : mode === 'forgot' ? <>Send reset link <Icon name="arrow" size={17} /></> : <>Update password <Icon name="arrow" size={17} /></>}</button>
+        </form>
+        <div className="auth-links">
+          {mode === 'login' && <><button type="button" onClick={() => { setMode('forgot'); setError(''); setNotice(''); }}>Forgot password?</button><button type="button" onClick={() => { setMode('customer'); setBusiness(''); setError(''); setNotice(''); }}>Customer portal</button></>}
+          {mode === 'customer' && <button type="button" onClick={() => { setMode('login'); setBusiness(''); setError(''); setNotice(''); }}>Back to sign in</button>}
+          {(mode === 'forgot' || mode === 'reset') && <button type="button" onClick={() => { setMode('login'); setPassword(''); setError(''); setNotice(''); }}>Back to sign in</button>}
+        </div>
+        <div className="auth-security"><Icon name="shield" size={15} /><span>Your session is encrypted and scoped to your business membership.</span></div>
+      </div>
+      <div className="auth-main-footer"><span>ORCA · Subscription management</span><span>© {new Date().getFullYear()} ORCA</span></div>
+    </section>
+  </main>;
 }
 
 function ReviewDialog({ value, onClose }: { value: { title: string; description: string; target: string; actionLabel: string; onApprove: () => Promise<boolean> }; onClose: () => void }) {
@@ -187,7 +276,7 @@ function ReviewDialog({ value, onClose }: { value: { title: string; description:
 }
 
 export default function App() {
-  const { data, patch, apiState, dataMode, toast, notify, commit, loadInvoice } = useWorkspace();
+  const { data, patch, apiState, dataMode, connectionError, toast, notify, commit, loadInvoice } = useWorkspace();
   const [route, setRoute] = useState<Route>(() => routeFromLocation());
   const [search, setSearch] = useState('');
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -199,8 +288,7 @@ export default function App() {
   const [profileOpen, setProfileOpen] = useState(false);
   const [recordDialog, setRecordDialog] = useState<CreateKind | null>(null);
   const [paymentInvoice, setPaymentInvoice] = useState<Invoice | null>(null);
-  const [signInOpen, setSignInOpen] = useState(false);
-  const [profile, setProfile] = useState<{ name: string; email: string; role: string; businessName: string }>({ name: 'Morgan Ellis', email: 'morgan@brightloop.example', role: 'unknown', businessName: 'Brightloop Software' });
+  const [profile, setProfile] = useState<{ name: string; email: string; role: string; businessName: string }>({ name: '', email: '', role: 'unknown', businessName: '' });
   const [review, setReview] = useState<{ title: string; description: string; target: string; actionLabel: string; onApprove: () => Promise<boolean> } | null>(null);
   const [copilotBusy, setCopilotBusy] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -362,41 +450,41 @@ export default function App() {
       navigate('subscriptions');
     });
   };
-  const downloadLocalData = async (filename: string) => {
-    const datasets = Object.fromEntries(Object.entries(data).map(([key, value]) => [key, value]));
-    const content = new TextEncoder().encode(JSON.stringify(datasets));
-    const digest = await crypto.subtle.digest('SHA-256', content);
-    const checksum = [...new Uint8Array(digest)].map((value) => value.toString(16).padStart(2, '0')).join('');
-    const counts = Object.fromEntries(Object.entries(datasets).map(([key, value]) => [key, Array.isArray(value) ? value.length : 0]));
-    const archive = { manifest: { version: '1.0', businessId: 'brightloop-demo', generatedAt: new Date().toISOString(), recordCounts: counts, checksums: { 'datasets.json': checksum }, mode: 'local-demo' }, datasets };
-    const blob = new Blob([JSON.stringify(archive, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = filename; link.click(); URL.revokeObjectURL(url);
-  };
   const exportData = async () => {
-    if (apiState === 'online' && dataMode === 'workspace') {
-      const fallbackId = crypto.randomUUID();
-      await commit('/exports', { kind: 'full', format: 'zip' }, (response) => {
-        const id = responseId(response, fallbackId);
-        patch('exports', (items) => [{ id, name: 'Full business archive', createdAt: new Date().toISOString(), status: 'Queued' }, ...items]);
-      });
+    if (apiState !== 'online' || dataMode !== 'workspace') {
+      notify('Connect to the API and sign in before requesting an export.');
       return;
     }
-    const counts = Object.fromEntries(Object.entries(data).map(([key, value]) => [key, Array.isArray(value) ? value.length : 0]));
-    await downloadLocalData('orca-demo-export.json');
-    const id = crypto.randomUUID(); patch('exports', (items) => [{ id, name: 'Local demo data export', createdAt: new Date().toISOString(), status: 'Ready', counts }, ...items]);
-    notify('Downloaded the local demo data export');
+    const fallbackId = crypto.randomUUID();
+    await commit('/exports', { kind: 'full', format: 'zip' }, (response) => {
+      const id = responseId(response, fallbackId);
+      patch('exports', (items) => [{ id, name: 'Full business archive', createdAt: new Date().toISOString(), status: 'Queued' }, ...items]);
+    });
   };
   const downloadExport = async (jobId: string) => {
     if (apiState !== 'online' || dataMode !== 'workspace') {
-      const job = data.exports.find((item) => item.id === jobId);
-      if (job?.status === 'Ready' && dataMode === 'demo') { await downloadLocalData('orca-demo-export.json'); notify('Downloaded the local demo data export'); return; }
-      notify('Downloads are available after connecting to a signed-in workspace.'); return;
+      notify('Connect to the API and sign in before downloading an export.'); return;
     }
     try {
       const response = await fetch(`/api/v1/exports/${encodeURIComponent(jobId)}/download`, { credentials: 'include', cache: 'no-store' });
       if (!response.ok) throw new Error(response.status === 409 ? 'This export is still preparing.' : 'The export could not be downloaded.');
       const blob = await response.blob(); const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = `orca-export-${jobId}.zip`; link.click(); URL.revokeObjectURL(url);
     } catch (error) { notify(error instanceof Error ? error.message : 'The export could not be downloaded.'); }
+  };
+  const runBilling = async (): Promise<number | null> => {
+    if (apiState !== 'online' || dataMode !== 'workspace' || !['admin', 'staff'].includes(profile.role)) {
+      notify('Sign in with workspace staff access before running billing.');
+      return null;
+    }
+    try {
+      const result = await apiRequest<Record<string, unknown>>('/billing/run', { method: 'POST', body: '{}' });
+      const created = Number(result.created);
+      if (!Number.isSafeInteger(created) || created < 0) throw new Error('The API returned an invalid billing result.');
+      return created;
+    } catch (error) {
+      notify(error instanceof Error ? `Billing run failed: ${error.message}` : 'Billing could not be run. Try again.');
+      return null;
+    }
   };
   const decideApproval = (approval: Approval, decision: 'approve' | 'reject') => {
     openReview(decision === 'approve' ? 'Approve and execute proposal' : 'Decline proposed action', `${decision === 'approve' ? 'Execute' : 'Decline'} “${approval.action}” with the exact inputs below. The server will recheck permissions and record versions before it runs. ${approval.detail}`, approval.target, decision === 'approve' ? 'Approve and execute' : 'Decline proposal', () => commit(`/agent/approvals/${encodeURIComponent(approval.id)}/decision`, { decision }, (response) => {
@@ -496,8 +584,9 @@ export default function App() {
       }
       if (kind === 'staff') {
         const email = value('email').trim();
-        const staff = { id, name: email, email, role: 'Staff' as const, status: 'Active', initials: initials(email) };
-        return await commit('/staff', { name: staff.name, email: staff.email, role: 'staff' }, (response) => patch('staff', (items) => [...items, { ...staff, id: responseId(response, id) }]));
+        const name = value('name').trim() || email;
+        const staff = { id, name, email, role: 'Staff' as const, status: 'Active', initials: initials(name) };
+        return await commit('/staff', { name, email: staff.email, role: 'staff' }, (response) => patch('staff', (items) => [...items, { ...staff, id: responseId(response, id) }]));
       }
       const rate = value('rate');
       const tax: TaxRule = { id, name: value('name').trim(), region: value('region').trim(), rateBps: percentageBps(rate), active: true };
@@ -522,7 +611,7 @@ export default function App() {
   });
 
   const actions: PageActions = {
-    navigate, create, confirmInvoice, cancelInvoice, sendInvoice, openPayment, payOnline, transitionSubscription, convertQuotation, exportData, downloadExport, decideApproval, search, setSearch,
+    navigate, create, confirmInvoice, cancelInvoice, sendInvoice, openPayment, payOnline, transitionSubscription, convertQuotation, exportData, downloadExport, runBilling, decideApproval, search, setSearch,
     sendQuotation: (id: string) => {
       const quote = data.quotations.find((item) => item.id === id); if (!quote) return;
       const customer = data.customers.find((item) => item.id === quote.customerId);
@@ -531,40 +620,43 @@ export default function App() {
   };
 
   const isCustomer = dataMode === 'workspace' && profile.role === 'customer';
-  const canManageInvoices = dataMode !== 'workspace' || ['admin', 'staff'].includes(profile.role);
+  const canManageInvoices = dataMode === 'workspace' && ['admin', 'staff'].includes(profile.role);
   const canPayOnline = isCustomer && apiState === 'online';
   const page = (() => {
     switch (route.page) {
-      case 'overview': return <OverviewPage data={data} actions={actions} />;
+      case 'overview': return <OverviewPage data={data} actions={actions} canRunBilling={['admin', 'staff'].includes(profile.role)} />;
       case 'customers': return <CustomersPage data={data} actions={actions} />;
       case 'catalog': return <CatalogPage data={data} actions={actions} />;
       case 'plans': return <PlansPage data={data} actions={actions} />;
       case 'quotations': return <QuotationsPage data={data} actions={actions} />;
       case 'subscriptions': return <SubscriptionsPage data={data} actions={actions} />;
       case 'invoices': return <InvoicesPage data={data} actions={actions} />;
-      case 'invoice': return <InvoiceTruthPage data={data} invoiceId={route.id ?? ''} businessName={dataMode === 'workspace' ? profile.businessName : 'Brightloop Software'} actions={actions} isCustomer={isCustomer} canManageInvoices={canManageInvoices} canPayOnline={canPayOnline} />;
+      case 'invoice': return <InvoiceTruthPage data={data} invoiceId={route.id ?? ''} businessName={profile.businessName} actions={actions} isCustomer={isCustomer} canManageInvoices={canManageInvoices} canPayOnline={canPayOnline} />;
       case 'payments': return <PaymentsPage data={data} actions={actions} />;
       case 'reports': return <ReportsPage data={data} />;
       case 'discounts': return <DiscountsPage data={data} actions={actions} />;
       case 'taxes': return <TaxesPage data={data} actions={actions} />;
       case 'staff': return <StaffPage data={data} actions={actions} />;
       case 'exports': return <ExportsPage data={data} actions={actions} />;
-      case 'copilot': return <CopilotPage data={data} messages={messages} onSend={sendCopilot} actions={actions} busy={copilotBusy} canRun={apiState === 'online' && dataMode === 'workspace'} canReview={apiState === 'online' && dataMode === 'workspace' && ['admin', 'staff'].includes(profile.role)} previewMode={dataMode === 'demo' || dataMode === 'auth-required' || apiState === 'offline'} />;
+      case 'copilot': return <CopilotPage data={data} messages={messages} onSend={sendCopilot} actions={actions} busy={copilotBusy} canRun={apiState === 'online' && dataMode === 'workspace'} canReview={apiState === 'online' && dataMode === 'workspace' && ['admin', 'staff'].includes(profile.role)} />;
       case 'portal': return <PortalPage data={data} actions={actions} isCustomer={isCustomer} canPayOnline={canPayOnline} />;
       default: return <SettingsPage actions={actions} />;
     }
   })();
 
-  const apiLabel = apiState === 'checking' ? 'Checking connection · sample data' : apiState === 'offline' ? 'Local demo' : dataMode === 'workspace' ? 'Workspace connected' : dataMode === 'auth-required' ? 'Preview data · sign in required' : 'Preview mode';
-  const apiTone = apiState === 'offline' || dataMode === 'demo' || apiState === 'checking' ? 'amber' : dataMode === 'workspace' ? 'green' : 'neutral';
-  const workspaceTitle = dataMode === 'workspace' ? profile.businessName : 'Brightloop Software · Demo';
-  const userName = dataMode === 'workspace' ? profile.name : 'Morgan Ellis';
-  const userRole = dataMode === 'workspace' ? (profile.role === 'admin' ? 'Workspace admin' : profile.role === 'staff' ? 'Staff member' : profile.role === 'customer' ? 'Customer' : 'Checking access') : 'Demo workspace';
-  const userInitials = dataMode === 'workspace' ? initials(profile.name || profile.email || 'Workspace') : 'ME';
+  const apiLabel = 'Workspace connected';
+  const apiTone = 'green';
+  const workspaceTitle = profile.businessName;
+  const userName = profile.name || profile.email;
+  const userRole = profile.role === 'admin' ? 'Workspace admin' : profile.role === 'staff' ? 'Staff member' : 'Customer';
+  const userInitials = initials(profile.name || profile.email || 'Workspace');
+  if (apiState !== 'online' || dataMode !== 'workspace') {
+    return <AuthScreen apiState={apiState} connectionError={connectionError} onRetry={() => window.location.reload()} onAuthenticated={() => window.location.reload()} />;
+  }
   return <div className={`app-shell ${mobileNavOpen ? 'nav-open' : ''}`}>
     <aside id="orca-sidebar" className="sidebar" ref={sidebarRef} aria-label="Workspace sidebar" aria-hidden={isMobileViewport && !mobileNavOpen}>
       <button type="button" className="brand-lockup" onClick={() => navigate('overview')} aria-label="ORCA home"><span className="brand-mark"><Icon name="overview" size={19} /></span><span><strong>orca</strong><small>Billing workspace</small></span></button>
-      <button className="workspace-switch" type="button"><span className="workspace-avatar">{workspaceTitle.slice(0, 1).toUpperCase()}</span><span><strong>{workspaceTitle}</strong><small>{dataMode === 'workspace' ? 'Business workspace' : 'Sample workspace'}</small></span><Icon name="chevron" size={15} /></button>
+      <div className="workspace-switch"><span className="workspace-avatar">{workspaceTitle.slice(0, 1).toUpperCase()}</span><span><strong>{workspaceTitle}</strong><small>Business workspace</small></span><Icon name="chevron" size={15} /></div>
       <div className="side-section-label">WORKSPACE</div>
       <nav className="primary-nav" aria-label="Main navigation">{primaryNav.map((item) => <button key={item.page} type="button" className={`nav-item ${route.page === item.page || (route.page === 'invoice' && item.page === 'invoices') ? 'active-nav' : ''}`} onClick={() => navigate(item.page)}><Icon name={item.icon} size={18} /><span>{pageTitles[item.page]}</span>{item.page === 'invoices' && <span className="nav-count">{data.invoices.filter((invoice) => toPaise(outstanding(invoice)) > 0n).length}</span>}</button>)}</nav>
       <div className="side-divider" /><div className="side-section-label">WORKSPACE TOOLS</div>
@@ -572,19 +664,18 @@ export default function App() {
       <button type="button" className={`nav-item ${['settings', 'discounts', 'taxes', 'staff', 'exports'].includes(route.page) ? 'active-nav' : ''}`} onClick={() => navigate('settings')}><Icon name="settings" size={18} /><span>Settings</span></button>
       <div className="sidebar-spacer" />
       <div className="sidebar-help"><span className="help-orb"><Icon name="shield" size={17} /></span><strong>Billing, in balance.</strong><small>Your records stay in sync across every billing cycle.</small><button type="button" className="help-link" onClick={() => navigate('reports')}>View billing health <Icon name="arrow" size={13} /></button></div>
-      <button type="button" className="portal-shortcut" onClick={() => navigate('portal')}><Icon name="globe" size={16} />Customer portal preview<Icon name="arrow" size={13} /></button>
+      <button type="button" className="portal-shortcut" onClick={() => navigate('portal')}><Icon name="globe" size={16} />Customer portal<Icon name="arrow" size={13} /></button>
       <button type="button" className="sidebar-profile" onClick={() => setProfileOpen(!profileOpen)}><Avatar initials={userInitials} size="sm" /><span><strong>{userName}</strong><small>{userRole}</small></span><Icon name="more" size={16} /></button>
-      {profileOpen && <div className="profile-popover"><button type="button" onClick={() => navigate('portal')}>{dataMode === 'workspace' && profile.role === 'customer' ? 'Customer portal' : 'Customer portal preview'}</button><button type="button" onClick={() => navigate('settings')}>Workspace settings</button>{dataMode === 'workspace' ? <button type="button" onClick={() => void signOut()}>Sign out</button> : <button type="button" onClick={() => setSignInOpen(true)}>Sign in / switch workspace</button>}</div>}
+      {profileOpen && <div className="profile-popover"><button type="button" onClick={() => navigate('portal')}>Customer portal</button><button type="button" onClick={() => navigate('settings')}>Workspace settings</button><button type="button" onClick={() => void signOut()}>Sign out</button></div>}
     </aside>
     {mobileNavOpen && <button type="button" className="nav-scrim" aria-label="Close navigation" onClick={() => setMobileNavOpen(false)} />}
     <div className="main-shell">
-      <header className="topbar"><div className="topbar-left"><button ref={mobileMenuButtonRef} type="button" className="icon-button mobile-menu-button" aria-label="Open navigation" aria-expanded={mobileNavOpen} aria-controls="orca-sidebar" onClick={() => setMobileNavOpen(true)}><Icon name="menu" size={18} /></button><div className="breadcrumb"><span>{dataMode === 'workspace' ? profile.businessName : 'Demo workspace'}</span><Icon name="chevron" size={14} /><strong>{pageTitles[route.page]}</strong></div></div><div className="topbar-actions"><label className="global-search"><Icon name="search" size={16} /><span className="sr-only">Search the current page</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search anything…" /><kbd>⌘ K</kbd></label><Badge tone={apiTone}>{apiLabel}</Badge>{apiState === 'online' && dataMode !== 'workspace' && <Button variant="outline" size="sm" onClick={() => setSignInOpen(true)}>Sign in</Button>}<div className="topbar-divider" /><IconButton icon="bell" label="Open Copilot approvals" onClick={() => navigate('copilot')} /><div className="top-avatar"><Avatar initials={userInitials} size="sm" /></div><div className="new-menu-wrap"><Button variant="primary" size="sm" icon="plus" onClick={() => setNewMenuOpen(!newMenuOpen)}>New</Button>{newMenuOpen && <div className="new-menu">{(['customer', 'product', 'plan', 'quotation', 'subscription'] as const).map((kind) => <button type="button" key={kind} onClick={() => { setNewMenuOpen(false); create(kind); }}>{`New ${kind}`}</button>)}</div>}</div></div></header>
+      <header className="topbar"><div className="topbar-left"><button ref={mobileMenuButtonRef} type="button" className="icon-button mobile-menu-button" aria-label="Open navigation" aria-expanded={mobileNavOpen} aria-controls="orca-sidebar" onClick={() => setMobileNavOpen(true)}><Icon name="menu" size={18} /></button><div className="breadcrumb"><span>{profile.businessName}</span><Icon name="chevron" size={14} /><strong>{pageTitles[route.page]}</strong></div></div><div className="topbar-actions"><label className="global-search"><Icon name="search" size={16} /><span className="sr-only">Search the current page</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search anything…" /><kbd>⌘ K</kbd></label><Badge tone={apiTone}>{apiLabel}</Badge><div className="topbar-divider" /><IconButton icon="bell" label="Open Copilot approvals" onClick={() => navigate('copilot')} /><div className="top-avatar"><Avatar initials={userInitials} size="sm" /></div><div className="new-menu-wrap"><Button variant="primary" size="sm" icon="plus" onClick={() => setNewMenuOpen(!newMenuOpen)}>New</Button>{newMenuOpen && <div className="new-menu">{(['customer', 'product', 'plan', 'quotation', 'subscription'] as const).map((kind) => <button type="button" key={kind} onClick={() => { setNewMenuOpen(false); create(kind); }}>{`New ${kind}`}</button>)}</div>}</div></div></header>
       <main className="page-content"><div className="content-wrap">{page}</div><footer className="app-footer"><span>ORCA · Billing workspace</span><span>Private workspace · INR</span></footer></main>
     </div>
     {recordDialog && <CreateRecordDialog kind={recordDialog} data={data} onClose={() => setRecordDialog(null)} onSave={(values) => saveRecord(recordDialog, values)} />}
     {paymentInvoice && <PaymentDialog invoice={paymentInvoice} customer={data.customers.find((customer) => customer.id === paymentInvoice.customerId)?.company ?? 'Customer'} onClose={() => setPaymentInvoice(null)} onSave={(values) => savePayment(paymentInvoice, values)} />}
     {review && <ReviewDialog value={review} onClose={() => setReview(null)} />}
-    {signInOpen && <SignInDialog onClose={() => setSignInOpen(false)} onDone={() => { setSignInOpen(false); window.location.reload(); }} />}
     {toast && <div className="toast" role="status"><Icon name="check" size={16} />{toast}</div>}
   </div>;
 }

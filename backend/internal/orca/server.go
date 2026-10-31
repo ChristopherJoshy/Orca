@@ -70,14 +70,12 @@ func newAPI(store *Store, config ServerConfig) *API {
 	r.Post("/api/v1/auth/password-reset/complete", a.passwordResetComplete)
 	r.Get("/api/v1/me", a.protected(false, a.me))
 	r.Get("/api/v1/portal/me", a.protected(false, a.portalMe))
-	for _, resource := range []string{"products", "plans", "customers", "quotations", "subscriptions", "invoices", "payments", "discounts", "taxes", "staff", "exports", "agent/approvals", "agent/runs", "mcp/connections"} {
+	for _, resource := range []string{"products", "plans", "customers", "quotations", "subscriptions", "invoices", "payments", "discounts", "taxes", "staff", "exports", "agent/approvals", "agent/runs"} {
 		path := "/api/v1/" + resource
 		if resource == "agent/approvals" {
 			r.Get(path, a.protected(false, a.listApprovals))
 		} else if resource == "agent/runs" {
 			r.Get(path, a.protected(false, a.listAgentRuns))
-		} else if resource == "mcp/connections" {
-			r.Get(path, a.protected(false, a.listMCPConnections))
 		} else {
 			r.Get(path, a.protected(false, a.listCollection(resource)))
 		}
@@ -128,8 +126,6 @@ func newAPI(store *Store, config ServerConfig) *API {
 	r.Get("/api/v1/agent/runs/{id}", a.protected(false, a.getAgentRun))
 	r.Post("/api/v1/agent/runs/{id}/cancel", a.protected(true, a.cancelAgentRun))
 	r.Post("/api/v1/agent/approvals/{id}/decision", a.protected(true, a.decideApproval))
-	r.Post("/api/v1/mcp/connections", a.protected(true, a.createMCPConnection))
-	r.Delete("/api/v1/mcp/connections/{id}", a.protected(true, a.revokeMCPConnection))
 	a.RegisterMCPRoutes(r)
 	r.Post("/api/v1/webhooks/stripe", a.stripeWebhook)
 	a.mux = r
@@ -145,7 +141,7 @@ func (a *API) securityHeaders(next http.Handler) http.Handler {
 	})
 }
 func (a *API) health(w http.ResponseWriter, r *http.Request) {
-	database := "demo"
+	database := "test-memory"
 	if a.Store.IsPostgres() {
 		database = "postgres"
 	}

@@ -2,12 +2,10 @@ package orca
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -369,76 +367,3 @@ func customerExportState(state *State, actor Actor) *State {
 	}
 	return out
 }
-func (a *API) listMCPConnections(w http.ResponseWriter, r *http.Request, auth Authenticated) {
-	if auth.Actor.Role != "admin" {
-		writeErr(w, ErrForbidden)
-		return
-	}
-	items := []any{}
-	err := a.Store.ReadFor(r.Context(), auth.Actor.BusinessID, func(st *State) error {
-		for _, v := range st.OAuthGrants {
-			items = append(items, v)
-		}
-		return nil
-	})
-	if err != nil {
-		writeErr(w, err)
-		return
-	}
-	writeJSON(w, 200, map[string]any{"items": items})
-}
-func (a *API) createMCPConnection(w http.ResponseWriter, r *http.Request, auth Authenticated) {
-	if err := requireAdmin(auth); err != nil {
-		writeErr(w, err)
-		return
-	}
-	var req struct {
-		ClientID string
-		Scopes   []string
-	}
-	if err := decodeBody(r, &req); err != nil {
-		writeErr(w, err)
-		return
-	}
-	if req.ClientID == "" {
-		writeErr(w, fmt.Errorf("%w: clientId is required", ErrValidation))
-		return
-	}
-	id, err := newUUID()
-	if err != nil {
-		writeErr(w, err)
-		return
-	}
-	grant := OAuthGrant{ID: id, BusinessID: auth.Actor.BusinessID, UserID: auth.Actor.UserID, ClientID: req.ClientID, Scopes: req.Scopes, ExpiresAt: time.Now().UTC().Add(30 * 24 * time.Hour)}
-	err = a.Store.UpdateFor(r.Context(), auth.Actor.BusinessID, func(st *State) error { st.OAuthGrants[id] = grant; return nil })
-	if err != nil {
-		writeErr(w, err)
-		return
-	}
-	writeJSON(w, 201, grant)
-}
-func (a *API) revokeMCPConnection(w http.ResponseWriter, r *http.Request, auth Authenticated) {
-	if err := requireAdmin(auth); err != nil {
-		writeErr(w, err)
-		return
-	}
-	id := chi.URLParam(r, "id")
-	now := time.Now().UTC()
-	err := a.Store.UpdateFor(r.Context(), auth.Actor.BusinessID, func(st *State) error {
-		v, ok := st.OAuthGrants[id]
-		if !ok {
-			return ErrNotFound
-		}
-		v.RevokedAt = &now
-		st.OAuthGrants[id] = v
-		return nil
-	})
-	if err != nil {
-		writeErr(w, err)
-		return
-	}
-	w.WriteHeader(204)
-}
-
-var _ = json.Marshal
-var _ = filepath.Clean

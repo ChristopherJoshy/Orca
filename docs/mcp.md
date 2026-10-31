@@ -29,6 +29,14 @@ Tool input is typed, size-limited, and validated by the shared domain layer. No 
 
 ## Local setup and management
 
-For local development, set `ORCA_PUBLIC_URL=http://localhost:5173` and use the same-origin API proxy. The OAuth protected-resource metadata is at `/.well-known/oauth-protected-resource/mcp`; authorization-server metadata is at `/.well-known/oauth-authorization-server`. The consent page requires an authenticated ORCA session. Settings currently exposes connection metadata and grant revocation; copyable client setup instructions are still to be added.
+Use **Settings → External MCP** to copy the Streamable HTTP endpoint and view the current OAuth grants. In an MCP client that supports remote Streamable HTTP and OAuth discovery, add the server URL shown there. The client discovers the authorization endpoints, registers through dynamic client registration, and starts the PKCE flow. ORCA opens the signed-in consent page; review the requested scopes there. No ORCA password, API key, or bearer token should be pasted into a client configuration.
+
+The protected-resource metadata is at `/.well-known/oauth-protected-resource/mcp`; authorization-server metadata is at `/.well-known/oauth-authorization-server`. For local development, use the Vite same-origin proxy and set `ORCA_PUBLIC_URL` to the exact browser origin (for example, `http://localhost:5173`). The browser origin, copied `/mcp` URL, and configured public origin must agree. For a hosted environment, the URL must be HTTPS and proxy the API's MCP and `/.well-known` routes.
+
+Settings lists grant metadata created by actual OAuth consent: client ID, approved scopes, expiry, and status. It never returns access tokens. A workspace admin can revoke an active grant from this list; the backend records the revocation and subsequent requests fail. MCP grants are user- and business-bound, and current membership is checked for each request. The settings interface does not manufacture grants; an external client must complete OAuth first.
+
+Available scopes are `records:read`, `reports:read`, `billing:simulate`, and `actions:propose`. External clients can read, explain, simulate, and propose supported actions; a proposed mutation still requires an ORCA review. Connection registration and authorization codes remain process-local, so clients may need to reconnect after an API restart. Client compatibility has not been certified beyond the official SDK test client.
+
+Team access is managed separately under **Settings → Team members**. The teammate first creates and verifies an ORCA account. A workspace admin can then add that account by its verified email. This action creates an active Staff membership and does not send an invitation email.
 
 Before connecting a production MCP client, configure an HTTPS public URL and verify that its OAuth discovery, PKCE, and Streamable HTTP behavior works against ORCA. Automated tests cover registration, discovery, redirect matching, PKCE, scope denial, client/tool round-trip, tenant ownership, expiry, membership revocation, and bearer revocation. No deployment or real third-party client verification is included in this build.

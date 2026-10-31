@@ -17,39 +17,26 @@ import (
 
 type Store struct {
 	pool  *pgxpool.Pool
-	path  string
 	mu    sync.Mutex
 	state *State
 }
 
-func OpenStore(ctx context.Context, databaseURL, statePath string) (*Store, error) {
-	if databaseURL != "" {
-		pool, err := pgxpool.New(ctx, databaseURL)
-		if err != nil {
-			return nil, fmt.Errorf("connect to PostgreSQL: %w", err)
-		}
-		if err := pool.Ping(ctx); err != nil {
-			pool.Close()
-			return nil, fmt.Errorf("ping PostgreSQL: %w", err)
-		}
-		s := &Store{pool: pool, state: NewState()}
-		if err := s.Migrate(ctx); err != nil {
-			pool.Close()
-			return nil, err
-		}
-		return s, nil
+func OpenStore(ctx context.Context, databaseURL string) (*Store, error) {
+	if databaseURL == "" {
+		return nil, errors.New("DATABASE_URL is required; ORCA requires PostgreSQL")
 	}
-	s := &Store{path: statePath, state: NewState()}
-	if statePath != "" {
-		data, err := os.ReadFile(statePath)
-		if err == nil {
-			if err := json.Unmarshal(data, s.state); err != nil {
-				return nil, fmt.Errorf("read local state: %w", err)
-			}
-			s.normalize()
-		} else if !errors.Is(err, os.ErrNotExist) {
-			return nil, fmt.Errorf("read local state: %w", err)
-		}
+	pool, err := pgxpool.New(ctx, databaseURL)
+	if err != nil {
+		return nil, fmt.Errorf("connect to PostgreSQL: %w", err)
+	}
+	if err := pool.Ping(ctx); err != nil {
+		pool.Close()
+		return nil, fmt.Errorf("ping PostgreSQL: %w", err)
+	}
+	s := &Store{pool: pool, state: NewState()}
+	if err := s.Migrate(ctx); err != nil {
+		pool.Close()
+		return nil, err
 	}
 	return s, nil
 }
@@ -119,8 +106,8 @@ func (s *Store) ReadFor(ctx context.Context, businessID string, fn func(*State) 
 	return tx.Commit(ctx)
 }
 
-// Update commits a business-scoped change atomically to PostgreSQL. The JSON
-// file path is only a local demo fallback.
+// Update commits a business-scoped change atomically to PostgreSQL. A pool-less
+// in-memory store is used by unit tests only; OpenStore never creates one.
 func (s *Store) Update(ctx context.Context, fn func(*State) error) error {
 	if s.pool != nil {
 		return updatePostgres(ctx, s.pool, "global", fn)
@@ -133,23 +120,6 @@ func (s *Store) Update(ctx context.Context, fn func(*State) error) error {
 	}
 	if err := fn(copy); err != nil {
 		return err
-	}
-	if s.path != "" {
-		data, err := json.Marshal(copy)
-		if err != nil {
-			return err
-		}
-		if err := os.MkdirAll(filepath.Dir(s.path), 0o700); err != nil {
-			return err
-		}
-		tmp := s.path + ".tmp"
-		if err := os.WriteFile(tmp, data, 0o600); err != nil {
-			return err
-		}
-		if err := os.Rename(tmp, s.path); err != nil {
-			_ = os.Remove(tmp)
-			return err
-		}
 	}
 	s.state = copy
 	return nil
@@ -393,11 +363,15 @@ func cloneState(state *State) (*State, error) {
 	if err := json.Unmarshal(data, copy); err != nil {
 		return nil, err
 	}
+	// PasswordHash is intentionally excluded from JSON so state snapshots and
+	// API responses cannot expose it. Restore the private field explicitly in
+	// this internal deep copy, or unrelated updates would erase stored hashes.
+	for id, user := range state.Users {
+		copy.Users[id] = user
+	}
 	normalizeState(copy)
 	return copy, nil
 }
-
-func (s *Store) normalize() { normalizeState(s.state) }
 
 func normalizeState(s *State) {
 	if s.Users == nil {

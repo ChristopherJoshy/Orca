@@ -247,14 +247,14 @@ paths:
       responses:
         '200': { description: Staff collection }
     post:
-      summary: Invite an existing ORCA account as staff
+      summary: Add an existing verified ORCA account as staff
       responses:
-        '201': { description: Membership created }
+        '201': { description: Staff membership created; no invitation email is sent }
   /staff/invitations:
     post:
-      summary: Create a staff invitation
+      summary: Add an existing verified ORCA account as staff
       responses:
-        '201': { description: Invitation accepted or membership created }
+        '201': { description: Staff membership created; no invitation email is sent }
   /reports/summary:
     get:
       summary: Business finance and integrity aggregates
@@ -316,32 +316,17 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Approval' }
         '409': { $ref: '#/components/responses/Conflict' }
-  /mcp/connections:
+  /mcp/grants:
     get:
-      summary: List configured MCP connection records
+      summary: List OAuth grants authorized for the current business
       responses:
-        '200': { description: Connection collection; this is management metadata, not an MCP server endpoint }
-    post:
-      summary: Create an MCP connection record
-      responses:
-        '201': { description: Connection record created }
-  /mcp/connections/{id}:
+        '200': { description: Grant metadata only; bearer tokens are never returned }
+  /mcp/grants/{id}:
     delete:
-      summary: Revoke an MCP connection record
+      summary: Revoke an OAuth grant for this business
       parameters: [{ $ref: '#/components/parameters/Id' }]
       responses:
         '204': { description: Connection revoked }
-  /mcp/grants:
-    get:
-      summary: List scoped MCP OAuth grants for this workspace
-      responses:
-        '200': { description: Grant collection; bearer tokens are never returned }
-  /mcp/grants/{id}:
-    delete:
-      summary: Revoke an MCP grant for this workspace
-      parameters: [{ $ref: '#/components/parameters/Id' }]
-      responses:
-        '204': { description: Grant revoked }
         '404': { $ref: '#/components/responses/NotFound' }
   /webhooks/stripe:
     post:

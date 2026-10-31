@@ -19,16 +19,11 @@ func main() {
 	defer stop()
 	environment := env("ORCA_ENV", "development")
 	databaseURL := strings.TrimSpace(os.Getenv("DATABASE_URL"))
-	statePath := ""
 	if databaseURL == "" {
-		statePath = strings.TrimSpace(os.Getenv("ORCA_DEMO_STATE"))
-		if statePath == "" {
-			slog.Error("DATABASE_URL is required; set ORCA_DEMO_STATE explicitly only for local demo mode")
-			os.Exit(1)
-		}
-		slog.Warn("running explicit demo-only file store; PostgreSQL is the default workspace source of truth")
+		slog.Error("DATABASE_URL is required; ORCA has no demo or file-store fallback")
+		os.Exit(1)
 	}
-	store, err := orca.OpenStore(ctx, databaseURL, statePath)
+	store, err := orca.OpenStore(ctx, databaseURL)
 	if err != nil {
 		slog.Error("open ORCA store", "error", err)
 		os.Exit(1)

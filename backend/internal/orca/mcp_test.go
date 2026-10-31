@@ -230,6 +230,81 @@ func TestMCPBearerRechecksExpiryMembershipAndTenantBinding(t *testing.T) {
 	}
 }
 
+func TestMCPGrantManagementListsAndRevokesOAuthGrantsOnly(t *testing.T) {
+	api, store, _, baseURL, sessionToken := newMCPTestServer(t)
+	csrf := "mcp-settings-csrf"
+	session := store.state.Sessions[tokenDigest(sessionToken)]
+	session.CSRFToken = tokenDigest(csrf)
+	store.state.Sessions[tokenDigest(sessionToken)] = session
+	now := time.Now().UTC()
+	store.state.OAuthGrants["grant-real"] = OAuthGrant{
+		ID: "grant-real", BusinessID: "biz-mcp-a", UserID: "user-mcp-a", ClientID: "orca_test_client",
+		Scopes: []string{mcpScopeRecords}, TokenHash: tokenDigest("opaque-test-bearer"), ExpiresAt: now.Add(time.Hour),
+	}
+	store.state.OAuthGrants["grant-metadata-only"] = OAuthGrant{
+		ID: "grant-metadata-only", BusinessID: "biz-mcp-a", UserID: "user-mcp-a", ClientID: "orphaned_metadata",
+		Scopes: []string{mcpScopeRecords}, ExpiresAt: now.Add(time.Hour),
+	}
+	handler := newAPI(store, api.Config).mux
+
+	listReq := httptest.NewRequest(http.MethodGet, "/api/v1/mcp/grants", nil)
+	listReq.AddCookie(&http.Cookie{Name: "orca_session", Value: sessionToken})
+	listRec := httptest.NewRecorder()
+	handler.ServeHTTP(listRec, listReq)
+	if listRec.Code != http.StatusOK {
+		t.Fatalf("grant list status = %d, want 200: %s", listRec.Code, listRec.Body.String())
+	}
+	var response struct {
+		Items []OAuthGrant `json:"items"`
+	}
+	if err := json.Unmarshal(listRec.Body.Bytes(), &response); err != nil {
+		t.Fatal(err)
+	}
+	if len(response.Items) != 1 || response.Items[0].ID != "grant-real" {
+		t.Fatalf("grant list included a non-OAuth metadata record: %#v", response.Items)
+	}
+	if strings.Contains(listRec.Body.String(), "opaque-test-bearer") || strings.Contains(listRec.Body.String(), tokenDigest("opaque-test-bearer")) {
+		t.Fatal("grant listing returned token material")
+	}
+
+	// A metadata-only endpoint must not mint a fake connection record.
+	createReq := httptest.NewRequest(http.MethodPost, "/api/v1/mcp/connections", strings.NewReader(`{"clientId":"fake","scopes":["records:read"]}`))
+	createReq.AddCookie(&http.Cookie{Name: "orca_session", Value: sessionToken})
+	createRec := httptest.NewRecorder()
+	handler.ServeHTTP(createRec, createReq)
+	if createRec.Code != http.StatusNotFound {
+		t.Fatalf("legacy fake connection creation route status = %d, want 404", createRec.Code)
+	}
+
+	revoke := func() *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodDelete, "/api/v1/mcp/grants/grant-real", nil)
+		req.AddCookie(&http.Cookie{Name: "orca_session", Value: sessionToken})
+		req.Header.Set("Origin", baseURL)
+		req.Header.Set("X-CSRF-Token", csrf)
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		return rec
+	}
+	if rec := revoke(); rec.Code != http.StatusNoContent {
+		t.Fatalf("grant revoke status = %d, want 204: %s", rec.Code, rec.Body.String())
+	}
+	if rec := revoke(); rec.Code != http.StatusNoContent {
+		t.Fatalf("repeated grant revoke status = %d, want idempotent 204: %s", rec.Code, rec.Body.String())
+	}
+	if err := store.Read(context.Background(), func(st *State) error {
+		grant := st.OAuthGrants["grant-real"]
+		if grant.RevokedAt == nil {
+			return errors.New("OAuth grant was not revoked")
+		}
+		if len(st.Audit) != 1 || st.Audit[0].Action != "mcp.grant_revoked" {
+			return fmt.Errorf("expected one grant revocation audit event; got %#v", st.Audit)
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func newMCPTestServer(t *testing.T) (*API, *Store, http.Handler, string, string) {
 	t.Helper()
 	baseURL := "http://localhost:8080"

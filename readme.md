@@ -48,7 +48,7 @@ DATABASE_URL=postgresql://orca:your-local-password@127.0.0.1:5432/orca?sslmode=d
 
 Open [http://localhost:5173](http://localhost:5173). The Vite development server and Go API bind to loopback; Vite proxies `/api`, `/mcp`, and `/.well-known` to the API. Database migrations run when the API starts. Local signup automatically verifies accounts so the core workflow can be exercised without email delivery.
 
-Use the built-in demo preview to inspect the workspace without signing in. Demo records are local presentation data and are never sent to the API.
+ORCA requires PostgreSQL and a real signed-in account. It does not ship demo users, sample business data, a local file store, or writable browser-only records. If the API or database is unavailable, the app shows that connection problem and does not substitute sample data. Create a disposable workspace through the normal signup screen and use its API-backed records for local testing; see the [local test journey](docs/demo.md).
 
 ### Optional providers
 

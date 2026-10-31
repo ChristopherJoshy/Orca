@@ -1,17 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { apiAvailable, apiRequest, ApiError, post, readItemsResult } from './api';
-import { addMoney, cloneDemo, fromPaise, multiplyMoney, parseRateBasisPoints, subtractMoney, toPaise, type InvoiceSnapshot, type InvoiceSnapshotLine, type WorkspaceData } from './model';
+import { emptyWorkspaceData, fromPaise, parseRateBasisPoints, subtractMoney, toPaise, type InvoiceSnapshot, type InvoiceSnapshotLine, type WorkspaceData } from './model';
 
 export type ApiState = 'checking' | 'online' | 'offline';
-export type DataMode = 'checking' | 'demo' | 'workspace' | 'auth-required';
-
-function initialData(): WorkspaceData {
-  try {
-    const saved = localStorage.getItem('orca-demo-v2');
-    if (saved) return { ...cloneDemo(), ...JSON.parse(saved) as Partial<WorkspaceData> };
-  } catch { /* Local demo state is recoverable from the built-in examples. */ }
-  return cloneDemo();
-}
+export type DataMode = 'checking' | 'workspace' | 'auth-required';
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' ? value as Record<string, unknown> : {};
@@ -22,9 +14,9 @@ function asMoney(value: unknown): string {
   throw new Error('The API returned money outside the decimal-string contract.');
 }
 
-function safeMap<T, U>(values: T[] | null, map: (value: T) => U): U[] | null {
-  if (!values) return null;
-  try { return values.map(map); } catch { return null; }
+function asExactDecimal(value: unknown): string {
+  if (typeof value === 'string' && /^-?\d+(?:\.\d+)?$/.test(value)) return value;
+  throw new Error('The API returned a value outside the decimal-string contract.');
 }
 
 function productFromApi(value: unknown) {
@@ -70,14 +62,13 @@ function subscriptionFromApi(value: unknown) {
   const s = asRecord(value);
   const lines = Array.isArray(s.lines) ? s.lines.map(asRecord) : [];
   const seats = lines.reduce((sum, line) => sum + Math.max(0, Number(line.quantity ?? 0)), 0) || Number(s.quantity ?? 1);
-  const amount = lines.reduce((sum, line) => addMoney(sum, multiplyMoney(asMoney(line.unitPrice ?? '0.00'), Math.max(0, Number(line.quantity ?? 0)))), '0.00');
   const rawStatus = String(s.status ?? 'Draft');
   const status = rawStatus.charAt(0).toUpperCase() + rawStatus.slice(1).toLowerCase();
   return {
     id: String(s.id ?? crypto.randomUUID()), number: String(s.number ?? s.subscriptionNumber ?? 'SUB-0000'),
     customerId: String(s.customerId ?? ''), planId: String(s.planId ?? ''), status: status as WorkspaceData['subscriptions'][number]['status'],
     startedAt: String(s.startedAt ?? s.startDate ?? ''), renewsAt: String(s.renewsAt ?? s.expiryDate ?? ''),
-    amount: asMoney(s.amount ?? s.total ?? (amount === '0.00' ? '0.00' : amount)), seats,
+    amount: asMoney(s.amount ?? s.total), seats,
     paymentTerms: Number(s.paymentTermsDays) > 0 ? `Net ${Number(s.paymentTermsDays)}` : String(s.paymentTerms ?? 'Due on receipt'),
   };
 }
@@ -117,7 +108,7 @@ function invoiceFromApi(value: unknown) {
       return {
         productId: String(line.productId ?? ''), productVersion: Number(line.productVersion ?? 0),
         description: String(line.description ?? line.name ?? 'Invoice line'), variant: String(line.variant ?? ''),
-        quantity: Math.max(0, Number(line.quantity ?? 0)), unitPrice: asMoney(line.unitPrice ?? '0.00'),
+        quantity: Math.max(0, Number(line.quantity ?? 0)), unitPrice: asExactDecimal(line.unitPrice ?? '0'),
         rawSubtotal: asMoney(line.rawSubtotal ?? line.subtotal ?? '0.00'),
         discountAmount: asMoney(line.discountAmount ?? line.discount ?? '0.00'),
         taxableAmount: asMoney(line.taxableAmount ?? '0.00'), taxRate: String(line.taxRate ?? '0'),
@@ -139,7 +130,7 @@ function invoiceFromApi(value: unknown) {
     return {
       description: String(line.description ?? line.name ?? 'Invoice line'),
       quantity: Math.max(0, Number(line.quantity ?? 0)),
-      unitPrice: asMoney(line.unitPrice ?? '0.00'),
+      unitPrice: asExactDecimal(line.unitPrice ?? '0'),
       taxRateBps: typeof line.taxRateBps === 'number' ? line.taxRateBps : rateBasisPoints(line.taxRate),
       discountBps: percentBasisPoints(discountAmount, rawSubtotal),
       ...(snapshot ? { storedCalculation: {
@@ -241,22 +232,37 @@ function approvalFromApi(value: unknown) {
 }
 
 export function useWorkspace() {
-  const [data, setData] = useState<WorkspaceData>(initialData);
+  const [data, setData] = useState<WorkspaceData>(emptyWorkspaceData);
   const [apiState, setApiState] = useState<ApiState>('checking');
   const [dataMode, setDataMode] = useState<DataMode>('checking');
   const [toast, setToast] = useState('');
-
-  useEffect(() => {
-    if (apiState !== 'offline' || dataMode !== 'demo') return;
-    try { localStorage.setItem('orca-demo-v2', JSON.stringify(data)); } catch { /* Private browsing may block storage. */ }
-  }, [apiState, dataMode, data]);
+  const [connectionError, setConnectionError] = useState('');
 
   useEffect(() => {
     let mounted = true;
     void apiAvailable().then(async (available) => {
       if (!mounted) return;
       setApiState(available ? 'online' : 'offline');
-      if (!available) { setDataMode('demo'); return; }
+      if (!available) {
+        setData(emptyWorkspaceData());
+        setDataMode('auth-required');
+        setConnectionError('ORCA could not reach its API. Check that the backend and database are running, then retry.');
+        return;
+      }
+      try {
+        await apiRequest('/me');
+      } catch (error) {
+        if (!mounted) return;
+        setData(emptyWorkspaceData());
+        if (error instanceof ApiError && error.status === 401) {
+          setDataMode('auth-required');
+          setConnectionError('');
+        } else {
+          setDataMode('auth-required');
+          setConnectionError(error instanceof ApiError ? `ORCA could not load your session: ${error.message}` : 'ORCA could not verify your session. Check the API connection and retry.');
+        }
+        return;
+      }
       const [products, plans, customers, subscriptions, invoices, quotations, payments, discounts, taxes, staff, exports, approvals] = await Promise.all([
         readItemsResult<unknown>('/products'), readItemsResult<unknown>('/plans'), readItemsResult<unknown>('/customers'),
         readItemsResult<unknown>('/subscriptions'), readItemsResult<unknown>('/invoices'), readItemsResult<unknown>('/quotations'),
@@ -266,42 +272,40 @@ export function useWorkspace() {
       if (!mounted) return;
       const results = [products, plans, customers, subscriptions, invoices, quotations, payments, discounts, taxes, staff, exports, approvals];
       if (results.some((result) => result.status === 401)) {
+        setData(emptyWorkspaceData());
         setDataMode('auth-required');
         return;
       }
-      const hasWorkspaceData = results.some((result) => result.items !== null);
-      if (!hasWorkspaceData) {
-        setDataMode(results.some((result) => result.status === 403) ? 'auth-required' : 'demo');
+      const failedResult = results.find((result) => result.items === null && result.status !== 403);
+      if (failedResult) {
+        setData(emptyWorkspaceData());
+        setDataMode('auth-required');
+        setConnectionError('ORCA could not load workspace records. Check the API connection and retry.');
         return;
       }
+      setConnectionError('');
       setDataMode('workspace');
-      const remoteProducts = safeMap(products.items, productFromApi) ?? [];
-      const remotePlans = safeMap(plans.items, planFromApi) ?? [];
-      const remoteCustomers = safeMap(customers.items, customerFromApi) ?? [];
-      const remoteSubscriptions = safeMap(subscriptions.items, subscriptionFromApi) ?? [];
-      const remoteInvoices = safeMap(invoices.items, invoiceFromApi) ?? [];
-      const remoteQuotations = safeMap(quotations.items, quotationFromApi) ?? [];
-      const remotePayments = safeMap(payments.items, paymentFromApi) ?? [];
-      const remoteDiscounts = safeMap(discounts.items, discountFromApi) ?? [];
-      const remoteTaxes = safeMap(taxes.items, taxFromApi) ?? [];
-      const remoteStaff = safeMap(staff.items, staffFromApi) ?? [];
-      const remoteExports = safeMap(exports.items, exportFromApi) ?? [];
-      const remoteApprovals = safeMap(approvals.items, approvalFromApi) ?? [];
-      setData((current) => ({
-        ...current,
-        products: remoteProducts,
-        plans: remotePlans,
-        customers: remoteCustomers,
-        subscriptions: remoteSubscriptions,
-        invoices: remoteInvoices,
-        quotations: remoteQuotations,
-        payments: remotePayments,
-        discounts: remoteDiscounts,
-        taxes: remoteTaxes,
-        staff: remoteStaff,
-        exports: remoteExports,
-        approvals: remoteApprovals,
-      }));
+      const rows = <T>(result: { items: T[] | null; status?: number }): T[] => result.items ?? [];
+      try {
+        setData({
+          products: rows(products).map(productFromApi),
+          plans: rows(plans).map(planFromApi),
+          customers: rows(customers).map(customerFromApi),
+          subscriptions: rows(subscriptions).map(subscriptionFromApi),
+          invoices: rows(invoices).map(invoiceFromApi),
+          quotations: rows(quotations).map(quotationFromApi),
+          payments: rows(payments).map(paymentFromApi),
+          discounts: rows(discounts).map(discountFromApi),
+          taxes: rows(taxes).map(taxFromApi),
+          staff: rows(staff).map(staffFromApi),
+          exports: rows(exports).map(exportFromApi),
+          approvals: rows(approvals).map(approvalFromApi),
+        });
+      } catch {
+        setData(emptyWorkspaceData());
+        setDataMode('auth-required');
+        setConnectionError('ORCA returned a workspace record that could not be read. Refresh or contact support.');
+      }
     });
     return () => { mounted = false; };
   }, []);
@@ -328,13 +332,8 @@ export function useWorkspace() {
   }, [apiState, dataMode, notify]);
 
   const commit = useCallback(async (path: string, body: unknown, update: (response?: unknown) => void): Promise<boolean> => {
-    if (apiState === 'offline') {
-      update();
-      notify('Saved in this browser demo');
-      return true;
-    }
     if (apiState !== 'online' || dataMode !== 'workspace') {
-      notify(dataMode === 'auth-required' ? 'Sign in to save changes to this workspace. Demo records are read-only.' : 'Connect a signed-in API workspace to save this change.');
+      notify(apiState === 'offline' ? 'ORCA is offline. No changes were saved.' : 'Sign in to a workspace before saving changes.');
       return false;
     }
     try {
@@ -343,10 +342,13 @@ export function useWorkspace() {
       notify('Saved to your workspace');
       return true;
     } catch (error) {
-      notify(error instanceof ApiError ? `Not saved: ${error.message}` : 'Not saved. Check the API connection and try again.');
+      const staffNeedsAccount = path === '/staff' && error instanceof ApiError && /create and verify an account/i.test(error.message);
+      notify(staffNeedsAccount
+        ? 'This teammate needs a verified ORCA account first. Ask them to create an account and verify this exact email, then add them here.'
+        : error instanceof ApiError ? `Not saved: ${error.message}` : 'Not saved. Check the API connection and try again.');
       return false;
     }
   }, [apiState, dataMode, notify]);
 
-  return { data, setData, patch, apiState, dataMode, toast, notify, commit, loadInvoice };
+  return { data, setData, patch, apiState, dataMode, connectionError, toast, notify, commit, loadInvoice };
 }

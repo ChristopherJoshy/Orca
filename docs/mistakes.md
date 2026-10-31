@@ -1,5 +1,13 @@
 # Verified mistakes and prevention
 
+## 2026-10-31 — Session updates erased password hashes
+
+- **Observed:** a newly created account could reach its workspace after signup, but a later email/password login returned an authentication error.
+- **Cause:** `cloneState` used JSON serialization for deep copying, while `User.PasswordHash` is tagged `json:"-"` to keep it out of API/state JSON. PostgreSQL state updates therefore compared and persisted cloned users with an empty password hash.
+- **Correction:** restore private password hashes explicitly after decoding the rest of the deep copy. Added a regression test for `cloneState`.
+- **Regression evidence:** fresh UI signup, sign-out, and regular email/password login succeeded against PostgreSQL after the fix.
+- **Prevention:** when using serialization-based internal copies, explicitly preserve fields intentionally excluded from JSON; cover authentication secrets and other excluded fields in clone tests.
+
 ## 2026-10-31 — Approval could report success without applying the action
 
 - **Observed:** the approval endpoint could persist an `approved` decision without running the proposed billing action, leaving the review result disconnected from the requested business effect.
