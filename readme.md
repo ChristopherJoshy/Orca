@@ -80,7 +80,7 @@ These are deliberate product choices. Period identity is enforced in PostgreSQL,
     <td width="50%" valign="top">
       <a href="docs/assets/screenshots/sign-in.webp"><img src="docs/assets/screenshots/sign-in.webp" alt="ORCA sign-in screen with product story and customer portal access" width="100%" /></a>
       <br />
-      <sub><strong>No secret demo door.</strong> Sign in or create a workspace from the first screen. There is no demo workspace, seed data, or browser-local business store.</sub>
+      <sub><strong>No secret demo door.</strong> Sign in or create a workspace from the first screen. ORCA has no demo workspace, default seed mode, or browser-local business store.</sub>
     </td>
   </tr>
 </table>
@@ -202,7 +202,7 @@ ORCA is deliberately honest about the finish line. The remaining acceptance work
 - Live Resend delivery, a real Stripe test-mode checkout, and full Groq/MCP client verification.
 - Full role-based browser acceptance and measured performance with thousands of records.
 
-The frontend is hosted on Vercel and the Go API runs behind Nginx on the VPS. Workspace signup and login work without email verification; automatic password recovery, customer portal verification, and document delivery remain unavailable without a funded email provider. Stripe, backups, and some end-to-end workflows still need configuration and acceptance. No demo workspace or sample production records were added. See [deployment](docs/deployment.md) and the [requirements matrix](docs/requirements.md).
+The frontend is hosted on Vercel and the Go API runs behind Nginx on the VPS. Workspace signup and login work without email verification; automatic password recovery, customer portal verification, and document delivery remain unavailable without a funded email provider. Stripe, backups, and some end-to-end workflows still need configuration and acceptance. One owner-authorized production account and its billing acceptance records were created through the real application; ORCA has no public demo workspace or default sample data. See [deployment](docs/deployment.md) and the [requirements matrix](docs/requirements.md).
 
 ## Hackathon team
 

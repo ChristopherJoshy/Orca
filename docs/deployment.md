@@ -19,7 +19,8 @@ The ORCA frontend and PostgreSQL-backed Go API are deployed. The frontend is pub
 - Nginx adds `/orca-api/` and `/orca-mcp/` routes inside the existing TLS server block and preserves the root app. The pre-change Nginx file is backed up at `/etc/nginx/backups/typelo-https.conf.orca`.
 - The existing IP-address certificate for `3.110.118.112` covers HTTPS; the existing Certbot renewal timer remains enabled. HTTP and HTTPS ingress were already available, so no AWS security-group change or new public port was needed.
 - PostgreSQL is installed on the VPS. Goose migrations 001–009 applied at startup. The API environment is root-owned with mode `0600` at `/etc/orca/orca.env`; exports use `/var/lib/orca/exports` with private permissions.
-- `GROQ_API_KEY` is configured on the VPS for Copilot. Resend and Stripe keys are not configured, so email delivery and Checkout are inactive. Production workspace signup creates an admin session without email verification and shows the no-budget email notice; customer signup, password reset, and send-email APIs refuse requests that cannot complete, with a branded explanation in the UI. No production account or sample records were seeded.
+- `GROQ_API_KEY` is configured on the VPS for Copilot. Resend and Stripe keys are not configured, so email delivery and Checkout are inactive. Production workspace signup creates an admin session without email verification and shows the no-budget email notice; customer signup, password reset, and send-email APIs refuse requests that cannot complete, with a branded explanation in the UI.
+- One owner-authorized acceptance workspace was created through the public signup flow. It contains the records used for the live billing journey below; these are tenant-owned acceptance records, not a demo workspace, default seed, or application fallback. No credentials are stored in this repository.
 
 ## Deployment checks
 
@@ -32,12 +33,15 @@ The ORCA frontend and PostgreSQL-backed Go API are deployed. The frontend is pub
 - Direct HTTPS health through the VPS Nginx prefix returned HTTP 200; the API reported `database: postgres`.
 - `nginx -t` passed before reload. Listener inspection confirmed only loopback listeners on 8081 and 5432.
 - Local production frontend build passed with `ORCA_PUBLIC_URL=https://orca-orcin.vercel.app`.
+- Workspace signup completed in the production browser without email verification and opened the authenticated admin workspace. The user-supplied email was used; the generated compliant password was delivered directly to the owner and is not recorded here.
+- The production workspace now contains an acceptance product with a priced variant and tax, a monthly plan, a customer, and active subscription `SUB-1049`. Running billing created invoice `INV-2026-00001` with stored line evidence and total ₹4,159.50; the invoice was confirmed and remains outstanding. No payment was recorded because no funds were received.
+- Vercel deployment for `c76bcbf` reached `READY`; VPS service `orca-api.service` was active, and the Vercel same-origin API health route returned PostgreSQL status `ok`.
 
 ## Remaining release work
 
 - Configure a verified Resend sender and `RESEND_API_KEY` to enable customer-portal email verification, password reset, and invoice/quotation delivery. Workspace admin signup and login do not depend on Resend.
 - Configure Stripe test credentials and a webhook signing secret before testing hosted Checkout.
-- Create a real test account through the normal workspace signup flow and run the full business workflow. Signup establishes an admin session without email verification; customer portal linking and password reset remain unavailable until Resend is configured. No test credentials or business data are committed.
+- The core workspace signup → catalog/plan/customer → subscription → generated invoice → invoice confirmation flow has been exercised with the owner-authorized account above. Re-test login after a fresh browser session, customer/staff role boundaries, live Stripe Checkout, and email-dependent flows when their providers are configured. The account credentials are not committed.
 - Configure automated PostgreSQL backups and validate export archive cleanup before relying on the VPS database for real business records.
 - Complete the remaining checks in [testing.md](testing.md) and [requirements.md](requirements.md). This hackathon MVP is hosted but is not production-ready billing software.
 

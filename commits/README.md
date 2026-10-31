@@ -33,3 +33,4 @@ Each implementation commit has a consecutively numbered Markdown record. The com
 - [0028 — Verify the live responsive authentication release](0028-live-auth-entry-verification.md)
 - [0029 — Remove authentication micro-labels](0029-remove-auth-micro-labels.md)
 - [0030 — Allow workspace access without email delivery](0030-workspace-signup-without-email.md)
+- [0031 — Record hosted account and billing acceptance](0031-hosted-account-billing-acceptance.md)

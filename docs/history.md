@@ -1,5 +1,14 @@
 # Change history and verification
 
+## 2026-10-31 — Exercise hosted signup and recurring billing
+
+- Created an owner-authorized production workspace through the regular signup form; signup established an authenticated admin session without email delivery. The compliant generated password was provided to the owner and was not added to the repository.
+- Added an acceptance product with a priced variant and tax, a monthly plan, a customer, and subscription `SUB-1049` through the hosted application. Advanced the subscription through Draft, Quotation, Confirmed, and Active.
+- Ran hosted billing to create `INV-2026-00001`. Verified the stored plan/product line evidence and 18% tax produced ₹4,159.50, then confirmed the invoice. It remains outstanding; no payment was recorded because no funds were received.
+- Vercel deployment for `c76bcbf` reached `READY`; the VPS API service was active and the Vercel same-origin health endpoint reported PostgreSQL `ok`.
+- Updated deployment, requirements, and README claims to distinguish the owner-requested account-backed acceptance records from demo workspaces or default seed data.
+- **Open:** fresh-session login, customer/staff role acceptance, payment-provider flows, and remaining acceptance-matrix checks are not established by this journey.
+
 ## 2026-10-31 — Let workspace accounts start without email delivery
 
 - Removed the email-provider gate from business workspace signup. Signup now atomically creates the admin account, business membership, and authenticated session; production accounts accurately remain `verified: false`. The branded post-signup notice still explains that automatic email was not funded, then continues into the workspace.
