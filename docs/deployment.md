@@ -1,19 +1,40 @@
-# Release and hosting handoff
+# Deployment status
 
-The owner requested Vercel frontend hosting and a VPS Go API. Hosting preparation is in progress; no production deployment has been completed yet. Local verification remains the release gate.
+The ORCA frontend and PostgreSQL-backed Go API are deployed. The frontend is public at [https://orca-orcin.vercel.app](https://orca-orcin.vercel.app). The API and MCP traffic use same-origin Vercel routes, so browser sessions remain on the frontend origin.
 
-## Local release gate
+## Vercel frontend
 
-Before handoff, require the checks in [testing.md](testing.md): backend tests/race/static analysis, frontend type/lint/build, database migrations, full journey, tenant/approval/export checks, and a browser pass. Confirm `.env` values are absent from the staged diff. Record outstanding provider-backed checks and the precise required variables without exposing values.
+- Project: `orca`, connected to `https://github.com/ChristopherJoshy/Orca.git`, production branch `main`.
+- Production URL: `https://orca-orcin.vercel.app`.
+- Build: Vite from the repository root; `npm ci --prefix frontend`, `npm --prefix frontend run build`, output `frontend/dist`; Node 24.x.
+- The production `ORCA_PUBLIC_URL` project variable is set to the canonical HTTPS origin so MCP OAuth discovery points to the live site. No API database or provider secrets are stored in Vercel.
+- `vercel.json` keeps `/api/*` and `/mcp*` same-origin and forwards them to the VPS through `/orca-api/` and `/orca-mcp/`. `/.well-known/*` is served from generated static assets because Vercel reserves that path.
+- Response headers mark authenticated API/MCP responses as private and uncached.
 
-## Owner-managed deployment checklist
+## VPS API
 
-The Vercel project `orca` is created and linked to this repository. It builds the Vite frontend from the repository root and publishes `frontend/dist`; the project is pinned to Node 24. `vercel.json` keeps `/api/*` and `/mcp*` same-origin while forwarding to the IP TLS endpoint through isolated `/orca-api/` and `/orca-mcp/` Nginx prefixes. Authenticated routes receive `Cache-Control: no-store, private`.
+- Host: `ec2-user@3.110.118.112`; API systemd unit: `orca-api.service`.
+- Go process binds to `127.0.0.1:8081`; PostgreSQL binds to `127.0.0.1:5432`. Neither port is exposed publicly.
+- Nginx adds `/orca-api/` and `/orca-mcp/` routes inside the existing TLS server block and preserves the root app. The pre-change Nginx file is backed up at `/etc/nginx/backups/typelo-https.conf.orca`.
+- The existing IP-address certificate for `3.110.118.112` covers HTTPS; the existing Certbot renewal timer remains enabled. HTTP and HTTPS ingress were already available, so no AWS security-group change or new public port was needed.
+- PostgreSQL is installed on the VPS. Goose migrations 001–009 applied at startup. The API environment is root-owned with mode `0600` at `/etc/orca/orca.env`; exports use `/var/lib/orca/exports` with private permissions.
+- `GROQ_API_KEY` is configured on the VPS for Copilot. Resend and Stripe keys are not configured, so email delivery and Checkout are inactive. No production account or sample records were seeded.
 
-Vercel reserves `/.well-known` and does not allow those paths to be rewritten. ORCA therefore generates the MCP OAuth discovery JSON as static Vite assets during the Vercel build using `VERCEL_PROJECT_PRODUCTION_URL` (or the explicit `ORCA_PUBLIC_URL`). The API's `ORCA_PUBLIC_URL` must match that production origin exactly. The corresponding files are included in `frontend/dist/.well-known/` and are not forwarded to the VPS.
+## Deployment checks
 
-The EC2 host already has Nginx on ports 80 and 443, an IP-address TLS certificate for `3.110.118.112`, and an active Certbot renewal timer. Port 8081 is free. ORCA's systemd unit binds only to `127.0.0.1:8081`; the Nginx location snippet uses unique prefixes to avoid replacing the existing root application. The AWS ingress rules were not changed.
+- Vercel production deployment completed and the canonical URL returned HTTP 200.
+- `https://orca-orcin.vercel.app/api/v1/health` returned HTTP 200 through the same-origin rewrite.
+- `https://orca-orcin.vercel.app/.well-known/oauth-authorization-server` returned HTTP 200.
+- Direct HTTPS health through the VPS Nginx prefix returned HTTP 200; the API reported `database: postgres`.
+- `nginx -t` passed before reload. Listener inspection confirmed only loopback listeners on 8081 and 5432.
+- Local production frontend build passed with `ORCA_PUBLIC_URL=https://orca-orcin.vercel.app`.
 
-Before enabling the service, configure a dedicated production `DATABASE_URL` and provider credentials in `/etc/orca/orca.env` (template: [ops/orca.env.example](../ops/orca.env.example)). Set exact production `ORCA_ALLOWED_ORIGIN` and `ORCA_PUBLIC_URL`, use the HTTPS Vercel production domain, and keep export archives under `/var/lib/orca/exports`. `ORCA_EMAIL_INTERVAL` controls invoice/quotation outbox delivery. Credentials used by the Go API belong on the VPS because Vercel hosts only static frontend assets; do not put backend secrets in Vercel build variables. Use separate credentials per environment. Start Stripe in test mode and verify the webhook path before considering live-charge handling.
+## Remaining release work
 
-No deployment has been performed by this project phase.
+- Configure a verified Resend sender and `RESEND_API_KEY` to test signup verification and invoice/quotation email delivery.
+- Configure Stripe test credentials and a webhook signing secret before testing hosted Checkout.
+- Create a real test account through the normal signup flow and run the full business workflow. No test credentials or business data are committed.
+- Configure automated PostgreSQL backups and validate export archive cleanup before relying on the VPS database for real business records.
+- Complete the remaining checks in [testing.md](testing.md) and [requirements.md](requirements.md). This hackathon MVP is hosted but is not production-ready billing software.
+
+Provider credentials used by the Go API belong on the VPS, not in Vercel variables. `ORCA_API_TARGET` is only a local Vite proxy setting. Keep `DATABASE_URL`, Groq, Stripe, and Resend secrets out of Git and out of frontend build variables.

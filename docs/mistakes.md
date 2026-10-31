@@ -93,3 +93,10 @@
 - **Correction:** made the pipeline summary responsive, hid secondary invoice columns on mobile while keeping status and amount visible, darkened text for measured contrast, gave the mobile drawer explicit `aria-hidden`/`inert` state and Escape/focus-return behavior, and labeled action headers. The Reports toolbar now stacks at mobile width and each report tab displays a distinct summary.
 - **Regression evidence:** `agent-browser` measured no horizontal overflow at 1440×900, 834×1112, and 390×844; dashboard Axe scans reported zero violations at each width. Desktop Axe scans across the main business routes, invoice detail, settings sections, and customer portal reported zero violations. Mobile navigation open/close and report tab/date-filter behavior were exercised.
 - **Prevention:** inspect real rendered layouts at desktop/tablet/mobile, run Axe on representative routes, measure actual foreground/background pairs, and give every action column an accessible header.
+
+## 2026-10-31 — Production Vercel build had no effective public origin
+
+- **Observed:** the first production build stopped in `generate-mcp-discovery.mjs` because its selected origin was not HTTPS.
+- **Cause:** the Vercel project had no effective production `ORCA_PUBLIC_URL`, so discovery generation fell back to the local development origin and correctly rejected it under `VERCEL_ENV=production`.
+- **Correction:** configured the explicit production origin `https://orca-orcin.vercel.app` on the Vercel project and verified both the local production build and hosted OAuth discovery endpoint.
+- **Prevention:** set and verify the production origin as part of Vercel project setup; keep the production guard so OAuth metadata cannot silently publish localhost URLs.

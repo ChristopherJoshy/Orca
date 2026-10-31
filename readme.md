@@ -14,10 +14,11 @@
   <img src="https://img.shields.io/badge/React-18-61DAFB?style=flat-square&logo=react&logoColor=111827" alt="React 18" />
   <img src="https://img.shields.io/badge/PostgreSQL-15%2B-4169E1?style=flat-square&logo=postgresql&logoColor=white" alt="PostgreSQL 15+" />
   <img src="https://img.shields.io/badge/MCP-Streamable%20HTTP-6E50B3?style=flat-square" alt="MCP Streamable HTTP" />
-  <img src="https://img.shields.io/badge/status-local%20MVP-875C0D?style=flat-square" alt="Status: local MVP" />
+  <img src="https://img.shields.io/badge/status-hosted%20MVP-286449?style=flat-square" alt="Status: hosted MVP" />
 </p>
 
 <p align="center">
+  <a href="https://orca-orcin.vercel.app"><strong>Hosted frontend ↗</strong></a> ·
   <a href="#a-quick-tour">Tour</a> ·
   <a href="#what-is-inside">Features</a> ·
   <a href="#run-orca-locally">Run locally</a> ·
@@ -28,10 +29,8 @@
 </p>
 
 > [!IMPORTANT]
-> **This is a working local MVP for the Odoo Hackathon — not production billing software.**
-> Core billing, payments, reporting, exports, Copilot, and MCP flows are implemented and tested locally.
-> Live provider delivery, durable job recovery, sustained load, and production hosting are still open.
-> The [acceptance matrix](docs/requirements.md) is the honest source of truth.
+> **Open ORCA:** [orca-orcin.vercel.app](https://orca-orcin.vercel.app). The Vercel frontend and VPS API are live; [the API health route](https://orca-orcin.vercel.app/api/v1/health) returns the PostgreSQL-backed service status.
+> ORCA is a hackathon MVP, not production billing software. Resend email delivery and Stripe Checkout are not configured, and several acceptance checks remain open. See the [acceptance matrix](docs/requirements.md).
 
 ## The question behind ORCA
 
@@ -205,7 +204,7 @@ ORCA is deliberately honest about the finish line. The remaining acceptance work
 - Live Resend delivery, a real Stripe test-mode checkout, and full Groq/MCP client verification.
 - Full role-based browser acceptance and measured performance with thousands of records.
 
-Vercel and VPS hosting configuration is prepared in the repository, but **no production deployment has been performed**. Do not treat this as production-ready until the database, email, payment, HTTPS, export storage, backups, and worker recovery have been configured and verified. See [deployment](docs/deployment.md) and the [requirements matrix](docs/requirements.md).
+The frontend is hosted on Vercel and the Go API runs behind Nginx on the VPS. Production sign-up, email, payment, backup, and end-to-end workflows still need owner-provided provider configuration and acceptance. No demo workspace or sample production records were added. See [deployment](docs/deployment.md) and the [requirements matrix](docs/requirements.md).
 
 ## Hackathon team
 
@@ -215,6 +214,7 @@ Vercel and VPS hosting configuration is prepared in the repository, but **no pro
 | **AjithJoshy** | Team Member |
 
 - **Repository:** [ChristopherJoshy/Orca](https://github.com/ChristopherJoshy/Orca)
+- **Hosted frontend:** [orca-orcin.vercel.app](https://orca-orcin.vercel.app)
 - **Hackathon:** [Odoo Hackathon project 78320](https://hackathon.odoo.com/hackathon/details/78320) *(portal requires participant sign-in)*
 
 ## Go deeper

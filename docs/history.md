@@ -180,3 +180,11 @@
 - Deleted the disposable businesses, users, memberships, and all seeded billing, payment, export, and audit records after capture. Removed temporary credentials and helper files. No demo data, seed mode, or browser fallback was added to the product.
 - **Verification:** `make verify` passed (tests, race detector, vet, TypeScript typecheck, lint alias, and production build). Every local image and document link resolves; README and gallery anchors resolve; `git diff --check` passed.
 - **Known limits:** a few captures show development copy defects, including Invoice Truth label concatenation and an export status rendering issue. They are recorded as UI follow-up work rather than presented as finished polish.
+
+## 2026-10-31 — Vercel frontend and VPS API deployment
+
+- Connected the canonical Vercel project `orca` to `ChristopherJoshy/Orca`, configured its production origin, and deployed the frontend at [orca-orcin.vercel.app](https://orca-orcin.vercel.app).
+- Installed PostgreSQL-backed API service and Goose migrations 001–009 on the owner-approved VPS. Nginx now routes the isolated `/orca-api/` and `/orca-mcp/` prefixes over its existing HTTPS certificate; the Go and PostgreSQL listeners remain loopback-only.
+- Updated the README and deployment guide with the hosted URL, production routing, service state, and remaining provider/acceptance work. No demo account or sample production records were added.
+- **Verification:** local production frontend build passed; Vercel deployment reached `READY`; direct VPS API health, Vercel same-origin API health, and OAuth discovery returned HTTP 200; `nginx -t` passed; PostgreSQL reported all nine application migrations applied.
+- **Open:** Resend and Stripe credentials are not configured, no real test account has been created, automated database backups are not configured, and the full browser workflow remains to be exercised.
