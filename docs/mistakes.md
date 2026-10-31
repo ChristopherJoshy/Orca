@@ -1,5 +1,13 @@
 # Verified mistakes and prevention
 
+## 2026-10-31 — Public landing typography and tablet layout were too constrained
+
+- **Observed:** owner review found the public-home copy too small and the content frame overly centered. Browser inspection also showed the header actions touching the navigation and the billing-principles row clipping at tablet width.
+- **Cause:** the desktop content max-width was narrow, supporting copy and card details used undersized font values, and the desktop header/rail persisted below their comfortable width.
+- **Correction:** expanded the desktop frame, increased body and supporting type, stacked the hero and collapsed the navigation and principle rail before tablet content became cramped.
+- **Regression evidence:** responsive review at 2048, 1440, 1024, 900, 834, 768, 390, 375, and 320 CSS pixels found no horizontal overflow; Axe reported zero violations and zero incomplete checks.
+- **Prevention:** review wide desktop plus breakpoint edges and phone widths; inspect visible text size and actual element bounds instead of relying on a single desktop screenshot.
+
 ## 2026-10-31 — Duplicate Vercel projects obscured the canonical build status
 
 - **Observed:** three extra Vercel projects for this repository reported failed deployments while the canonical `orca` project's deployment for the same commit was ready. Two duplicate projects lacked the effective HTTPS public origin required to generate MCP discovery metadata; the third combined a `frontend` root directory with root-relative install settings.

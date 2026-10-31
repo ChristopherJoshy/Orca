@@ -27,3 +27,4 @@ Each implementation commit has a consecutively numbered Markdown record. The com
 - [0022 — Fail closed when email delivery is unavailable](0022-email-provider-gates.md)
 - [0023 — Publish the public ORCA landing page](0023-public-landing-page.md)
 - [0024 — Verify the public homepage production release](0024-live-public-landing-release.md)
+- [0025 — Improve public landing responsiveness and type](0025-responsive-landing-refinement.md)
