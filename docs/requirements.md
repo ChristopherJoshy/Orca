@@ -31,7 +31,7 @@ This matrix joins the source subscription-management brief with the expanded ORC
 | MCP-2 | External clients can read and propose only; execution needs approval | Scoped search/explanation/report/simulation and proposal tools are implemented. MCP cannot execute mutations directly; ORCA approval executes supported actions after server-side checks. Export-request tool and broad action coverage remain open. | Partial |
 | UX-1 | Accessible light responsive experience for desktop/tablet/mobile and keyboard | `agent-browser` inspected all 17 application routes at 1440×900, 834×1112, and 390×844; all route/viewport scans reported zero Axe violations and no horizontal overflow. Report tabs and date filters were exercised. Mobile drawer state, Escape close, and focus return were checked. Full role-based workflow and keyboard-only acceptance remains open. | Partial |
 | PERF-1 | Ordinary pages under two seconds with thousands of records | No repeatable seeded-data latency measurement yet. | Pending |
-| EXT-1 | Real email, Stripe, Groq/MCP provider behavior verified | One direct Groq chat-completions request returned HTTP 200, verifying connectivity only. Full Copilot workflow, live Stripe sandbox checkout, email delivery, and external MCP client certification remain unverified. | Pending |
+| EXT-1 | Real email, Stripe, Groq/MCP provider behavior verified | An earlier direct Groq call returned HTTP 200; current authenticated requests from workstation and VPS hit Cloudflare HTTP 403 error 1010, so the selected model and full Copilot workflow are not verified. Live Stripe sandbox checkout, email delivery, and external MCP client certification remain unverified. | Pending |
 
 ## Scope interpretation
 
@@ -48,5 +48,5 @@ The source brief explicitly requires the subscription lifecycle, recurring invoi
 - Stripe Checkout and webhook unit tests passed; isolated-schema PostgreSQL tests ran through migrations 006–007. No live Stripe call was made.
 - `agent-browser` scans of all 17 application routes at desktop/tablet/mobile widths reported no horizontal overflow and zero Axe violations after the contrast/navigation fixes. Report tabs/date filters and mobile Escape/focus-return behavior were exercised. Full role-based workflow acceptance remains open.
 - Recurring-billing catch-up tests cover month-end anchor restoration, multi-period downtime recovery, repeated-run idempotency, future-start activation, per-business failure isolation, and worker cancellation. Memory-store tests pass; clean-schema PostgreSQL worker and sustained multi-worker/load acceptance remain open.
-- One direct Groq chat-completions request returned HTTP 200; it did not exercise the complete Copilot tool loop.
+- One earlier direct Groq chat-completions request returned HTTP 200; later authenticated model-list/tool-call probes from workstation and VPS returned Cloudflare HTTP 403 error 1010. They did not exercise the complete Copilot tool loop.
 - `git diff --check` and OpenAPI YAML parsing passed after the latest documentation/API changes.

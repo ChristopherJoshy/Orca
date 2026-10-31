@@ -41,7 +41,7 @@ func main() {
 		EmailFrom:           strings.TrimSpace(os.Getenv("EMAIL_FROM")),
 		PublicURL:           env("ORCA_PUBLIC_URL", "http://localhost:5173"),
 		GroqAPIKey:          os.Getenv("GROQ_API_KEY"),
-		GroqModel:           env("GROQ_MODEL", "openai/gpt-oss-120b"),
+		GroqModel:           env("GROQ_MODEL", orca.DefaultGroqModel),
 		StripeAPIKey:        os.Getenv("STRIPE_SECRET_KEY"),
 		StripeWebhookSecret: os.Getenv("STRIPE_WEBHOOK_SECRET"),
 	})

@@ -214,6 +214,29 @@ func TestGroqToolCallingLoopPersistsProgressWithoutProviderKey(t *testing.T) {
 	}
 }
 
+func TestGroqToolLoopUsesFastProductionDefaultWhenModelIsUnset(t *testing.T) {
+	api, admin := newAgentToolTestAPI()
+	api.Store.state.AgentRuns["run-default"] = AgentRun{ID: "run-default", BusinessID: admin.BusinessID, UserID: admin.UserID, Status: "Running", Transcript: []any{map[string]any{"role": "user", "content": "Summarize billing."}}}
+	var requestedModel string
+	transport := agentTestRoundTripper(func(r *http.Request) (*http.Response, error) {
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("decode provider request: %v", err)
+		}
+		requestedModel, _ = body["model"].(string)
+		payload := `{"choices":[{"finish_reason":"stop","message":{"role":"assistant","content":"Billing summary is ready."}}]}`
+		return &http.Response{StatusCode: http.StatusOK, Header: http.Header{"Content-Type": []string{"application/json"}}, Body: io.NopCloser(strings.NewReader(payload)), Request: r}, nil
+	})
+	run := api.Store.state.AgentRuns["run-default"]
+	answer, _, _, err := api.runGroqConversation(context.Background(), &http.Client{Transport: transport}, "https://groq.test/chat/completions", "offline-test-key", "", admin, run, []map[string]any{{"role": "system", "content": groqSystemPrompt}, {"role": "user", "content": "Summarize billing."}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if requestedModel != DefaultGroqModel || answer != "Billing summary is ready." {
+		t.Fatalf("model=%q answer=%q; want %q and a completed answer", requestedModel, answer, DefaultGroqModel)
+	}
+}
+
 type agentTestRoundTripper func(*http.Request) (*http.Response, error)
 
 func (f agentTestRoundTripper) RoundTrip(request *http.Request) (*http.Response, error) {

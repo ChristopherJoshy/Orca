@@ -35,3 +35,4 @@ Each implementation commit has a consecutively numbered Markdown record. The com
 - [0030 — Allow workspace access without email delivery](0030-workspace-signup-without-email.md)
 - [0031 — Record hosted account and billing acceptance](0031-hosted-account-billing-acceptance.md)
 - [0032 — Restore Copilot run progress and clarify Invoice Truth](0032-copilot-chat-invoice-truth.md)
+- [0033 — Default Copilot to Groq GPT-OSS 20B](0033-groq-fast-tool-model.md)

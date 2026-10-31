@@ -255,3 +255,9 @@
 - Rendered persisted tool calls and results as named, color-coded progress steps; restored them from run transcripts after refresh and connected the stop action to API cancellation. Reworked the chat into a larger conversation panel with a usable composer and available-tool rail.
 - Improved Invoice Truth spacing and type hierarchy for the invoice identity, billed-to details, date/period facts, payment allocations, balance summary, engine version, and long calculation hash.
 - **Verification:** Go tests, race detector and vet; frontend typecheck/lint/production build; OpenAPI YAML parsing; and `git diff --check` passed. Live Groq tool-call and browser verification remain open.
+
+## 2026-10-31 — Select the low-latency Groq tool model
+
+- Reviewed Groq's current official model and tool-use documentation. Set GPT-OSS 20B as the default: the production catalog lists about 1,000 tokens/second, 131,072 context, and function calling. ORCA invokes tools serially, so the model's lack of parallel tool calls does not constrain the current implementation. GPT-OSS 120B remains configurable for workflows that favor its stronger reasoning over latency.
+- Updated backend defaults, local/VPS environment templates, README setup guidance, and model-selection documentation. The real local `.env` model setting was changed without reading or modifying its credential.
+- **Verification:** Go tests (including an explicit default-model test) and `go vet` passed. An authenticated Groq call from both the workstation environment and VPS was blocked by Cloudflare HTTP 403 error 1010; no live model call or end-to-end Copilot result is claimed.

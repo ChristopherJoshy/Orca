@@ -4,7 +4,7 @@ This document defines the product agent. `AGENTS.md` is the separate contributor
 
 ## Current implementation
 
-The React client starts a persisted run through the Go API. When `GROQ_API_KEY` is configured, the API calls Groq's OpenAI-compatible chat-completions endpoint and executes a bounded tool loop. The default model is `openai/gpt-oss-120b`; `GROQ_MODEL` can override it. Without a key, the run is recorded as unavailable and no action is claimed. The run-list response includes an `available` boolean; it never returns the provider credential.
+The React client starts a persisted run through the Go API. When `GROQ_API_KEY` is configured, the API calls Groq's OpenAI-compatible chat-completions endpoint and executes a bounded tool loop. The default model is `openai/gpt-oss-20b`; `GROQ_MODEL` can override it. Groq currently lists this production model at about 1,000 tokens/second with local tool use, which fits ORCA's serial tool loop; use `openai/gpt-oss-120b` when a workflow favors its stronger reasoning over latency. These are provider-published speeds, not ORCA end-to-end measurements. Without a key, the run is recorded as unavailable and no action is claimed. The run-list response includes an `available` boolean; it never returns the provider credential.
 
 The current tool set is deliberately smaller than the product target:
 

@@ -16,6 +16,7 @@ import (
 )
 
 const (
+	DefaultGroqModel        = "openai/gpt-oss-20b"
 	groqChatCompletionsURL  = "https://api.groq.com/openai/v1/chat/completions"
 	maxAgentSteps           = 6
 	maxAgentToolCalls       = 3
@@ -208,7 +209,7 @@ func (a *API) runGroqConversation(ctx context.Context, client *http.Client, endp
 		return "", "", nil, errors.New("provider unavailable")
 	}
 	if strings.TrimSpace(model) == "" {
-		model = "openai/gpt-oss-120b"
+		model = DefaultGroqModel
 	}
 	transcript := make([]any, 0, maxAgentTranscriptItems)
 	totalToolCalls := 0

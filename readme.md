@@ -161,7 +161,7 @@ Provider credentials belong in the ignored root `.env` for local work, or in a s
 
 | Variable | Purpose |
 |---|---|
-| `GROQ_API_KEY` | Enables Copilot calls; `GROQ_MODEL` defaults to `openai/gpt-oss-120b` |
+| `GROQ_API_KEY` | Enables Copilot calls; `GROQ_MODEL` defaults to `openai/gpt-oss-20b` |
 | `STRIPE_SECRET_KEY` | Enables Checkout; use an `sk_test_…` key for the current test-mode integration |
 | `STRIPE_WEBHOOK_SECRET` | Verifies `POST /api/v1/webhooks/stripe` signatures |
 | `RESEND_API_KEY` | Email provider credential; end-to-end delivery still needs verification |
