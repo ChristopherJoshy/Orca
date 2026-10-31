@@ -8,6 +8,14 @@
 - **Regression evidence:** fresh UI signup, sign-out, and regular email/password login succeeded against PostgreSQL after the fix.
 - **Prevention:** when using serialization-based internal copies, explicitly preserve fields intentionally excluded from JSON; cover authentication secrets and other excluded fields in clone tests.
 
+## 2026-10-31 — Staff membership audit used a composite map key as a UUID
+
+- **Observed:** adding a verified user from another business returned HTTP 500 and did not add the membership.
+- **Cause:** the membership map key combines business and user IDs, but PostgreSQL stores the audit event's `resource_id` as a UUID. Passing the composite key failed the database cast and rolled back the transaction.
+- **Correction:** retain the composite key only for in-memory membership lookup and store the member's user UUID as the audit resource ID. Staff lookup now loads globally visible accounts while rechecking destination admin authority in the transaction.
+- **Regression evidence:** unit tests verify the audit resource UUID, cross-business membership isolation, and rejection of unverified users. The local PostgreSQL-backed browser flow returned HTTP 201 and displayed the active staff row after reload.
+- **Prevention:** use a schema-valid resource identifier for audit references, and verify new write paths against PostgreSQL rather than only an in-memory Store.
+
 ## 2026-10-31 — Approval could report success without applying the action
 
 - **Observed:** the approval endpoint could persist an `approved` decision without running the proposed billing action, leaving the review result disconnected from the requested business effect.

@@ -47,3 +47,10 @@
 - Updated contributor rules, API/MCP docs, and local test instructions to prohibit demo records and keep numbered commit records and verified pushes.
 - **Verification:** `make verify` passed after these code changes (Go tests, race detector, `go vet`, TypeScript typecheck, current lint alias, and production build). `git diff --check` passed. The browser signup → sign-out → login flow passed on a fresh account. A real local customer, plan, subscription, and recurring draft invoice were created; Invoice Truth displayed stored totals and hash. A test invoice was confirmed and fully paid in the earlier populated account. Copilot UI opened at mobile width; Axe reported zero violations on `/copilot`.
 - **Not verified:** prompt submission to Groq was rejected by automatic review because it could send workspace billing records to the external provider. Real Groq tool execution, Resend, Stripe checkout, external MCP client compatibility, all-role browser acceptance, and performance/load targets remain open. No hosting was performed.
+
+## 2026-10-31 — Verified team access across workspaces
+
+- Fixed staff creation to resolve already-verified ORCA users across workspace boundaries while rechecking destination-workspace admin access in the write transaction. Only the destination business receives a staff membership; other roles remain unchanged.
+- Added audit logging with the member's UUID as the resource ID and tests for cross-business access, audit identity, and rejection of unverified accounts.
+- **Verification:** Go tests passed. Against local PostgreSQL, adding an existing verified account returned HTTP 201 and a page reload showed the active Staff member in the workspace table. `git diff --check` passed.
+- **Known limit:** staff members must already have a verified ORCA account; this path does not send invitation email.

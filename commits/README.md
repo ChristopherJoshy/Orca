@@ -5,3 +5,4 @@ Each implementation commit has a consecutively numbered Markdown record. The com
 - [0001 — Initial ORCA local implementation](0001-initial-local-build.md)
 - [0002 — Stripe checkout, finance reports, and responsive accessibility](0002-stripe-reports-accessibility.md)
 - [0003 — Auth-first workspace, MCP/team settings, and billing reload fixes](0003-auth-mcp-team-billing-fixes.md)
+- [0004 — Verified team access across workspaces](0004-team-membership-scope.md)

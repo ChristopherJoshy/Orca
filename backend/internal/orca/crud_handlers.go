@@ -509,7 +509,12 @@ func (a *API) inviteStaff(w http.ResponseWriter, r *http.Request, auth Authentic
 		return
 	}
 	var member Membership
-	err = a.Store.UpdateFor(r.Context(), auth.Actor.BusinessID, func(st *State) error {
+	err = a.Store.Update(r.Context(), func(st *State) error {
+		adminKey := membershipKey(auth.Actor.BusinessID, auth.Actor.UserID)
+		admin, ok := st.Memberships[adminKey]
+		if !ok || admin.RevokedAt != nil || admin.Role != "admin" {
+			return ErrForbidden
+		}
 		var user User
 		for _, u := range st.Users {
 			if u.EmailNormalized == email {
@@ -517,7 +522,7 @@ func (a *API) inviteStaff(w http.ResponseWriter, r *http.Request, auth Authentic
 				break
 			}
 		}
-		if user.ID == "" {
+		if user.ID == "" || !user.Verified {
 			return fmt.Errorf("%w: team members must first create and verify an ORCA account", ErrValidation)
 		}
 		key := membershipKey(auth.Actor.BusinessID, user.ID)
@@ -526,6 +531,8 @@ func (a *API) inviteStaff(w http.ResponseWriter, r *http.Request, auth Authentic
 		}
 		member = Membership{BusinessID: auth.Actor.BusinessID, UserID: user.ID, Role: "staff"}
 		st.Memberships[key] = member
+		// Memberships use a composite map key, while audit_events.resource_id is a UUID.
+		st.Audit = append(st.Audit, auditEvent(auth.Actor, "staff.added", "membership", user.ID, map[string]any{"userId": user.ID, "role": "staff"}))
 		return nil
 	})
 	if err != nil {
