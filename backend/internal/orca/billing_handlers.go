@@ -230,8 +230,16 @@ func (a *API) transitionSubscription(w http.ResponseWriter, r *http.Request, aut
 			if v.Status != "Closed" || !plan.AllowRenew {
 				return ErrConflict
 			}
+			loc, err := time.LoadLocation(st.Businesses[v.BusinessID].Timezone)
+			if err != nil {
+				return fmt.Errorf("%w: invalid business timezone", ErrValidation)
+			}
 			v.Status = "Draft"
-			v.StartDate = now.Format("2006-01-02")
+			today := now.In(loc).Format("2006-01-02")
+			v.StartDate = today
+			if v.ExpiryDate != "" && v.ExpiryDate < today {
+				v.ExpiryDate = ""
+			}
 			v.BillingCursor = nil
 		default:
 			return fmt.Errorf("%w: unsupported subscription action", ErrValidation)

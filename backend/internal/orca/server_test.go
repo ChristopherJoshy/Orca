@@ -196,6 +196,35 @@ func TestCustomerCanPauseAndResumeOwnedSubscriptionWhenPlanAllows(t *testing.T) 
 	}
 }
 
+func TestRenewExpiredSubscriptionStartsNewTermWithoutStaleExpiry(t *testing.T) {
+	store := &Store{state: NewState()}
+	handler := NewAPI(store, ServerConfig{Env: "development", CookieSecure: false, AllowedOrigin: "http://localhost:5173"})
+	cookie, csrf := signupForTest(t, handler, "renew@example.test", "Renew Business")
+	session := store.state.Sessions[tokenDigest(cookie.Value)]
+	business := store.state.Businesses[session.BusinessID]
+	loc, err := time.LoadLocation(business.Timezone)
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().In(loc)
+	store.state.Plans["renew-plan"] = Plan{ID: "renew-plan", BusinessID: business.ID, AllowRenew: true}
+	store.state.Subscriptions["renew-sub"] = Subscription{ID: "renew-sub", BusinessID: business.ID, CustomerID: "customer", PlanID: "renew-plan", Status: "Closed", StartDate: now.AddDate(-1, 0, 0).Format("2006-01-02"), ExpiryDate: now.AddDate(0, 0, -1).Format("2006-01-02"), Version: 1}
+	body, _ := json.Marshal(map[string]any{"action": "renew", "expectedVersion": 1})
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/subscriptions/renew-sub/transition", bytes.NewReader(body))
+	req.AddCookie(cookie)
+	req.Header.Set("Origin", "http://localhost:5173")
+	req.Header.Set("X-CSRF-Token", csrf)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("renew returned %d: %s", rec.Code, rec.Body.String())
+	}
+	renewed := store.state.Subscriptions["renew-sub"]
+	if renewed.Status != "Draft" || renewed.StartDate != now.Format("2006-01-02") || renewed.ExpiryDate != "" || renewed.BillingCursor != nil {
+		t.Fatalf("renewed subscription retained stale term state: %+v", renewed)
+	}
+}
+
 func TestCustomerSignupCreatesBusinessScopedPortalAccess(t *testing.T) {
 	store := &Store{state: NewState()}
 	now := time.Now().UTC()

@@ -11,7 +11,7 @@ Use a disposable local business and provider test mode. Expected journey:
 1. Create and verify a business admin account; confirm invalid passwords and duplicate email are rejected.
 2. Create a product with a variant price adjustment, tax rule, monthly plan, and quotation template.
 3. Create a customer and a quotation from the template. Review validity and line totals, then move it to confirmed subscription.
-4. Sign in through the customer portal and accept the sent offer. Activate the converted subscription at its start date; where the plan permits pause, pause and resume it in the portal. Show the stored billing period anchor and next period.
+4. Sign in through the customer portal and accept the sent offer. Activate the converted subscription at its start date; where the plan permits pause, pause and resume it in the portal. In the staff workspace, verify pause, resume, early close, and renewal actions match plan permissions. Show the stored billing period anchor and next period.
 5. Generate a draft invoice once; repeat the job/request and show the same invoice identity with no duplicate journal.
 6. Review Invoice Truth: stored line calculation, discount-before-tax steps, engine version, and hash.
 7. Confirm invoice and record a partial manual payment. Show remaining receivable and journal balance; record final allocation and show Paid.

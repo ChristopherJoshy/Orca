@@ -435,7 +435,7 @@ export default function App() {
     const item = data.subscriptions.find((subscription) => subscription.id === subscriptionId);
     if (!item) return;
     const normalized = action.toLowerCase();
-    const status = normalized.includes('quote') ? 'Quotation' : normalized === 'confirm' ? 'Confirmed' : normalized === 'activate' ? 'Active' : normalized.includes('pause') ? 'Paused' : normalized === 'resume' ? 'Active' : normalized === 'close' ? 'Closed' : item.status;
+    const status = normalized.includes('quote') ? 'Quotation' : normalized === 'confirm' ? 'Confirmed' : normalized === 'activate' ? 'Active' : normalized.includes('pause') ? 'Paused' : normalized === 'resume' ? 'Active' : normalized === 'close' ? 'Closed' : normalized === 'renew' ? 'Draft' : item.status;
     if (status === item.status) return;
     const perform = () => commit(`/subscriptions/${encodeURIComponent(subscriptionId)}/transition`, { action: normalized.replaceAll(' ', '_') }, () => patch('subscriptions', (items) => items.map((subscription) => subscription.id === subscriptionId ? { ...subscription, status } : subscription)));
     if (status === 'Closed') openReview('Close subscription', `Close ${item.number} for ${money(item.amount)} recurring value.`, item.number, 'Approve & close', perform);

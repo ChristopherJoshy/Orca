@@ -135,3 +135,11 @@
 - Updated environment templates, provider contracts, README, deployment notes, and acceptance evidence.
 - **Verification:** `make verify` passed, including the race detector; OpenAPI unaffected; `git diff --check` passed.
 - **Known limits:** live sender/provider behavior is unverified; email worker is in-process, and account verification/reset emails still use direct provider calls.
+
+## 2026-10-31 — Plan-aware subscription lifecycle actions
+
+- Replaced the dead “Manage” action with only the valid staff actions for each subscription state and plan policy: quote/confirm/activate, pause/resume, early close, and renew.
+- Renewal now starts on the business-local date and clears an already-expired term end so the recurring worker does not immediately skip the renewed subscription.
+- Added route coverage for renewing a closed subscription whose prior expiry has passed; the customer portal's owner-scoped pause/resume coverage remains in place.
+- **Verification:** focused lifecycle tests, frontend typecheck/build, `make verify`, and `git diff --check` passed.
+- **Known limits:** full cross-product policy matrix and subscription future-start browser acceptance remain open.

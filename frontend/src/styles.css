@@ -234,6 +234,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .more-button { border: 0; background: transparent; color: #6f6d7b; cursor: pointer; }
 .small-action { padding: 6px 8px; border: 1px solid #e8e2f1; border-radius: 6px; background: #faf8fd; color: #7356b3; font-size: 9px; font-weight: 600; cursor: pointer; }
 .small-action:hover { background: #f2edf9; }
+.subscription-actions { display: flex; flex-wrap: wrap; gap: 5px; }
 .usage-cell { min-width: 100px; }
 .usage-cell > span { display: block; margin-bottom: 5px; color: #777583; font-size: 9px; }
 .usage-track { height: 4px; }
