@@ -759,7 +759,9 @@ func paymentWire(v Payment) map[string]any {
 	return map[string]any{"id": v.ID, "businessId": v.BusinessID, "invoiceId": v.InvoiceID, "customerId": v.CustomerID, "amount": money2(v.Amount), "method": v.Method, "date": v.ReceivedAt, "receivedAt": v.ReceivedAt, "createdAt": v.CreatedAt, "note": v.Note, "provider": v.Provider}
 }
 func discountWire(v Discount) map[string]any {
-	return map[string]any{"id": v.ID, "name": v.Name, "kind": strings.Title(v.Kind), "value": v.Value, "scope": v.Scope, "minimumPurchase": money2(v.MinimumPurchase), "minimum": money2(v.MinimumPurchase), "minimumQuantity": v.MinimumQuantity, "minQuantity": v.MinimumQuantity, "useCount": v.UseCount, "maxUses": v.MaxUses, "limit": v.MaxUses, "endsAt": v.EndsAt, "active": true, "version": v.Version}
+	now := time.Now().UTC()
+	active := (v.StartsAt == nil || !now.Before(*v.StartsAt)) && (v.EndsAt == nil || !now.After(*v.EndsAt)) && (v.MaxUses <= 0 || v.UseCount < v.MaxUses)
+	return map[string]any{"id": v.ID, "name": v.Name, "kind": strings.Title(v.Kind), "value": v.Value, "scope": v.Scope, "minimumPurchase": money2(v.MinimumPurchase), "minimum": money2(v.MinimumPurchase), "minimumQuantity": v.MinimumQuantity, "minQuantity": v.MinimumQuantity, "useCount": v.UseCount, "maxUses": v.MaxUses, "limit": v.MaxUses, "startsAt": v.StartsAt, "endsAt": v.EndsAt, "active": active, "version": v.Version}
 }
 func taxWire(v TaxRule) map[string]any {
 	return map[string]any{"id": v.ID, "name": v.Name, "region": v.Region, "rate": v.Rate, "active": v.Active, "version": v.Version}

@@ -105,3 +105,11 @@
 
 - Refined the README around ORCA's verified billing-evidence and recovery approach, clarified that workspace records are account-backed with no demo workspace, updated the current acceptance gaps, and included the two confirmed hackathon team members.
 - **Verification:** `git diff --check -- readme.md` passed. No team details were inferred from evaluator information.
+
+## 2026-10-31 — Discount validity windows
+
+- Added admin inputs for discount start and end dates. The client sends explicit UTC day boundaries so the selected end date remains eligible through the full day.
+- The API rejects a reversed date range and negative use limits, defaults omitted minimum quantity to one, returns both dates, and reports rules as inactive before their start, after expiry, or when their usage cap is reached.
+- Added API coverage for a future-starting discount and reversed date bounds, updated the OpenAPI contract and requirements matrix, and made the discount table show the validity window.
+- **Verification:** focused discount API test passed; `make verify` passed, including race checks, vet, typecheck, lint alias, and production build; `git diff --check` passed.
+- **Known limits:** concurrency and failed-attempt discount consumption still need acceptance coverage; availability decisions for invoices remain based on the billing engine's effective service date.

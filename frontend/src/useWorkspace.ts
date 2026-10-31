@@ -200,6 +200,7 @@ function discountFromApi(value: unknown) {
   const rawKind = String(d.kind ?? 'Percentage').toLowerCase();
   if (rawKind !== 'fixed' && rawKind !== 'percentage') throw new Error('The API returned an unsupported discount kind.');
   const kind: 'Fixed' | 'Percentage' = rawKind === 'fixed' ? 'Fixed' : 'Percentage';
+  const startsAt = String(d.startsAt ?? '');
   const endsAt = String(d.endsAt ?? '');
   return {
     id: String(d.id ?? crypto.randomUUID()), name: String(d.name ?? 'Discount'), kind,
@@ -207,7 +208,7 @@ function discountFromApi(value: unknown) {
     scope: String(d.scope ?? 'Subscriptions'), minimum: asMoney(d.minimumPurchase ?? d.minimum ?? '0.00'),
     minimumQuantity: Math.max(1, Number(d.minQuantity ?? d.minimumQuantity ?? 1)),
     usage: Number(d.useCount ?? d.usage ?? 0), limit: Number(d.maxUses ?? d.limit ?? 0),
-    endsAt: endsAt.slice(0, 10), active: d.active !== false,
+    startsAt: startsAt.slice(0, 10), endsAt: endsAt.slice(0, 10), active: d.active !== false,
   };
 }
 

@@ -30,6 +30,50 @@ func TestWorkspaceAPIKeepsLocalDemoTenantsIsolated(t *testing.T) {
 	}
 }
 
+func TestDiscountCreationPersistsValidityWindowAndRejectsReversedDates(t *testing.T) {
+	store := &Store{state: NewState()}
+	handler := NewAPI(store, ServerConfig{Env: "development", CookieSecure: false, AllowedOrigin: "http://localhost:5173"})
+	cookie, csrf := signupForTest(t, handler, "discount@example.test", "Discount Business")
+	start := time.Now().UTC().Add(24 * time.Hour).Truncate(time.Second)
+	end := start.Add(24 * time.Hour)
+	create := func(startsAt, endsAt time.Time) *httptest.ResponseRecorder {
+		t.Helper()
+		body, err := json.Marshal(map[string]any{
+			"name": "Launch offer", "kind": "percentage", "value": "10", "scope": "subscription",
+			"minimumPurchase": "0.00", "minimumQuantity": 1, "maxUses": 25,
+			"startsAt": startsAt.Format(time.RFC3339), "endsAt": endsAt.Format(time.RFC3339),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/discounts", bytes.NewReader(body))
+		req.AddCookie(cookie)
+		req.Header.Set("Origin", "http://localhost:5173")
+		req.Header.Set("X-CSRF-Token", csrf)
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		return rec
+	}
+	created := create(start, end)
+	if created.Code != http.StatusCreated {
+		t.Fatalf("future discount returned %d: %s", created.Code, created.Body.String())
+	}
+	var response map[string]any
+	if err := json.Unmarshal(created.Body.Bytes(), &response); err != nil {
+		t.Fatal(err)
+	}
+	if response["active"] != false {
+		t.Fatalf("future discount should not be shown active: %#v", response)
+	}
+	if response["startsAt"] == nil || response["endsAt"] == nil {
+		t.Fatalf("discount validity window was not returned: %#v", response)
+	}
+	invalid := create(end, start)
+	if invalid.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("reversed discount window returned %d, want 422: %s", invalid.Code, invalid.Body.String())
+	}
+}
+
 func signupForTest(t *testing.T, handler http.Handler, email, businessName string) (*http.Cookie, string) {
 	t.Helper()
 	body := map[string]string{"email": email, "password": "Password!2026", "businessName": businessName}

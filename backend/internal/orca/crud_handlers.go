@@ -272,6 +272,17 @@ func (a *API) createDiscount(w http.ResponseWriter, r *http.Request, auth Authen
 		writeErr(w, fmt.Errorf("%w: scope must be product or subscription", ErrValidation))
 		return
 	}
+	if v.MaxUses < 0 {
+		writeErr(w, fmt.Errorf("%w: maxUses cannot be negative", ErrValidation))
+		return
+	}
+	if v.MinimumQuantity < 1 {
+		v.MinimumQuantity = 1
+	}
+	if v.StartsAt != nil && v.EndsAt != nil && v.EndsAt.Before(*v.StartsAt) {
+		writeErr(w, fmt.Errorf("%w: endsAt must not precede startsAt", ErrValidation))
+		return
+	}
 	id, err := newUUID()
 	if err != nil {
 		writeErr(w, err)
