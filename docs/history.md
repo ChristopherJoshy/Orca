@@ -4,7 +4,7 @@
 
 - Increased the public home's heading, body, card, navigation, and workflow text sizes and widened the content frame to reduce excessive margins on large displays.
 - At tablet widths, the hero stacks, the primary navigation collapses, and the billing-principles rail wraps so its content remains visible.
-- **Verification:** frontend typecheck/lint and production build passed. Browser checks at 2048×1168, 1440×900, 1024×768, 900×900, 834×1112, 768×1024, 390×844, 375×812, and 320×740 found no horizontal overflow; Axe reported zero violations and zero incomplete checks. Owner review prompted this refinement; the Vercel release check follows the push.
+- **Verification:** frontend typecheck/lint and production build passed. Browser checks at 2048×1168, 1440×900, 1024×768, 900×900, 834×1112, 768×1024, 390×844, 375×812, and 320×740 found no horizontal overflow; Axe reported zero violations and zero incomplete checks. Commit `65a00f9` reached `READY` in Vercel. The live page also passed Axe at 1920×1080 and 390×844; homepage, API health, and OAuth discovery returned HTTP 200.
 
 ## 2026-10-31 — Publish the public homepage to canonical Vercel
 

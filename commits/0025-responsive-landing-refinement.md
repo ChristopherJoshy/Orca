@@ -20,4 +20,4 @@ Refined the public ORCA homepage after owner feedback that its type was too smal
 
 ## Limitations
 
-- The updated CSS still needs its automatic canonical Vercel production deployment check after this commit is pushed.
+- The post-push Vercel production and live browser checks are recorded in [commit record 0026](0026-live-responsive-landing-release.md).

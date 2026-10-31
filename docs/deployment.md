@@ -25,6 +25,7 @@ The ORCA frontend and PostgreSQL-backed Go API are deployed. The frontend is pub
 
 - Vercel production deployment completed and the canonical URL returned HTTP 200.
 - Landing-page commit `153beb5` reached `READY` in the canonical `orca` production project; the account inventory contains no other ORCA projects.
+- Responsive typography/layout commit `65a00f9` reached `READY`; the live page passed Axe at desktop and phone widths, and the API and OAuth discovery endpoints remained healthy.
 - Production browser review confirmed the public landing page and workspace signup navigation; Axe reported zero violations and zero incomplete checks.
 - `https://orca-orcin.vercel.app/api/v1/health` returned HTTP 200 through the same-origin rewrite.
 - `https://orca-orcin.vercel.app/.well-known/oauth-authorization-server` returned HTTP 200.
