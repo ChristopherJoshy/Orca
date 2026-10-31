@@ -16,9 +16,9 @@ The current tool set is deliberately smaller than the product target:
 | `preview_next_invoice` | Run the calculation engine without writing an invoice or consuming discount usage | Business scope; customers only see their own subscriptions |
 | `request_action_review` | Create a pending, version-bound proposal | Staff only |
 
-The review tool supports `confirm_invoice`, `cancel_invoice`, `send_invoice`, `record_payment`, and `close_subscription`. In ORCA, approval rechecks the current permission, proposer membership, resource version, and stored input hash. The approved domain action and the approval result commit in one business transaction. Payment recording also posts the allocation, balanced journal, audit event, and outbox event atomically. Invoice email approval queues an outbox request; delivery is not confirmed until an outbox worker processes it.
+The review tool supports `confirm_invoice`, `cancel_invoice`, `send_invoice`, `record_payment`, `close_subscription`, `pause_subscription`, `resume_subscription`, and `renew_subscription`. In ORCA, approval rechecks the current permission, proposer membership, resource version, and stored input hash. The approved domain action and the approval result commit in one business transaction. Subscription transitions recheck plan policy and current status; renewal binds the business-local start date into the review and clears an already-expired term and stale billing cursor. Payment recording also posts the allocation, balanced journal, audit event, and outbox event atomically. Invoice email approval queues an outbox request; delivery is not confirmed until an outbox worker processes it.
 
-Copilot does not yet create or edit customers, catalog entries, plans, discounts, quotations, subscriptions, or settings. It cannot allocate arbitrary payments, issue credits, charge cards, send quotations or collection reminders, or perform bulk actions. The full page-action matrix below remains the acceptance target.
+Copilot does not yet create or edit customers, catalog entries, plans, discounts, quotations, subscription terms, or settings. It cannot allocate arbitrary payments, issue credits, charge cards, send quotations or collection reminders, or perform bulk actions. The full page-action matrix below remains the acceptance target.
 
 ## Page-action/tool matrix
 
@@ -29,7 +29,7 @@ Copilot does not yet create or edit customers, catalog entries, plans, discounts
 | Discounts | No dedicated tool | Eligibility, preparation, creation, and usage investigation |
 | Customers | Search within role scope | Create/edit contacts and bulk changes |
 | Quotations | Search quotations | Prepare, update, send, and accept offers |
-| Subscriptions | Search and preview next invoice; propose permitted close | Draft creation, quantity changes, pause/resume/renew, activation, and bulk changes |
+| Subscriptions | Search and preview next invoice; propose plan-permitted close, pause, resume, and renewal for ORCA review | Draft creation, quantity changes, activation, and bulk changes |
 | Invoices | Search and explain stored calculations; propose confirm/cancel/send | Draft correction, credit notes, and broader bulk workflows |
 | Payments | Search records; propose a manual invoice payment | Reconciliation, arbitrary allocation, refund, and charge workflows |
 | Reports | Read summary and measured integrity values | Filtered reports and report export |
@@ -49,10 +49,10 @@ Ask one focused question when the target, amount, date, or scope is ambiguous. U
 
 ## Approval policy
 
-Reads and simulations can run directly. The current consequential action set creates a pending ORCA review and cannot execute from the model or an external MCP client. Each approval binds the actor, business, canonical input hash, resource ID and version, and a 15-minute expiry. The reviewer sees the exact proposal. Approval rechecks that the proposer still has staff access and that the target version and inputs are unchanged; stale proposals fail without side effects. Rejections do not execute. Approval, outcome, and financial side effects are audited.
+Reads and simulations can run directly. The current consequential action set creates a pending ORCA review and cannot execute from the model or an external MCP client. Each approval binds the actor, business, canonical input hash, resource ID and version, and a 15-minute expiry. The reviewer sees the exact proposal. Approval rechecks that the proposer still has staff access and that the target version, current plan permission, and stored inputs are unchanged; stale proposals fail without side effects. Rejections do not execute. Approval, outcome, and financial side effects are audited.
 
 The broader policy remains: charges, payment recording, finalized invoices, credits/refunds, cancellations, external sends, access changes, and bulk mutations require review. Define compensating actions for any external effect that cannot be rolled back.
 
 ## Verification
 
-Offline tests cover tool scope, customer ownership, invoice explanation, no-write simulations, exact proposal hashes, approval execution, idempotency, stale-version rejection, and cancellation. MCP tests cover the shared tool boundary. A PostgreSQL HTTP flow migrates a clean schema, records an approved subscription close, and checks the persisted execution result. Real Groq calls and provider delivery have not been verified.
+Offline tests cover tool scope, customer ownership, invoice explanation, no-write simulations, exact proposal hashes, approval execution, idempotency, stale-version rejection, plan-permission revalidation for subscription pause/resume/renewal, and cancellation. MCP tests cover the shared tool boundary. A PostgreSQL HTTP flow migrates a clean schema, records an approved subscription close, and checks the persisted execution result. Real Groq calls and provider delivery have not been verified.

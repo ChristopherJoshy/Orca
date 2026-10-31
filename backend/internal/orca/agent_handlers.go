@@ -12,11 +12,67 @@ import (
 )
 
 func approvalWire(v Approval) map[string]any {
-	title := v.Action
-	if title == "" {
-		title = "Review proposed action"
+	label := approvalActionLabel(v.Action)
+	return map[string]any{"id": v.ID, "title": label, "detail": approvalDetail(v), "target": v.ResourceID, "resourceId": v.ResourceID, "createdAt": v.CreatedAt, "status": v.Status, "action": label, "inputs": v.Inputs, "executionResult": v.ExecutionResult}
+}
+
+func approvalActionLabel(action string) string {
+	switch action {
+	case "confirm_invoice":
+		return "Confirm invoice"
+	case "cancel_invoice":
+		return "Cancel invoice"
+	case "send_invoice":
+		return "Send invoice"
+	case "record_payment":
+		return "Record payment"
+	case "close_subscription":
+		return "Close subscription"
+	case "pause_subscription":
+		return "Pause subscription"
+	case "resume_subscription":
+		return "Resume subscription"
+	case "renew_subscription":
+		return "Renew subscription"
+	default:
+		return "Review proposed action"
 	}
-	return map[string]any{"id": v.ID, "title": title, "detail": fmt.Sprint(v.Inputs), "target": v.ResourceID, "resourceId": v.ResourceID, "createdAt": v.CreatedAt, "status": v.Status, "action": v.Action, "inputs": v.Inputs, "executionResult": v.ExecutionResult}
+}
+
+func approvalDetail(v Approval) string {
+	inputs, _ := v.Inputs.(map[string]any)
+	resourceID := v.ResourceID
+	if resourceID == "" {
+		resourceID = inputString(inputs, "resourceId")
+	}
+	switch v.Action {
+	case "confirm_invoice":
+		return fmt.Sprintf("Confirm and post invoice %s.", resourceID)
+	case "cancel_invoice":
+		return fmt.Sprintf("Cancel invoice %s.", resourceID)
+	case "send_invoice":
+		return fmt.Sprintf("Queue invoice %s for email delivery. Delivery status is tracked separately.", resourceID)
+	case "record_payment":
+		date := inputString(inputs, "date")
+		if date == "" {
+			date = "the approval date"
+		}
+		detail := fmt.Sprintf("Allocate INR %s by %s to invoice %s, received on %s.", inputString(inputs, "amount"), inputString(inputs, "method"), resourceID, date)
+		if note := inputString(inputs, "note"); note != "" {
+			detail += " Note: " + note
+		}
+		return detail
+	case "close_subscription":
+		return fmt.Sprintf("Close subscription %s.", resourceID)
+	case "pause_subscription":
+		return fmt.Sprintf("Pause subscription %s. ORCA will recheck its plan permission and status before applying the change.", resourceID)
+	case "resume_subscription":
+		return fmt.Sprintf("Resume subscription %s. ORCA will recheck its plan permission and status before applying the change.", resourceID)
+	case "renew_subscription":
+		return fmt.Sprintf("Renew subscription %s as a draft starting %s. An expiry date before the start date will be cleared.", resourceID, inputString(inputs, "startDate"))
+	default:
+		return fmt.Sprint(v.Inputs)
+	}
 }
 func (a *API) listApprovals(w http.ResponseWriter, r *http.Request, auth Authenticated) {
 	if auth.Actor.Role == "customer" {

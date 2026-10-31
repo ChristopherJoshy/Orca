@@ -42,8 +42,12 @@ func executeApprovedAction(st *State, approver Actor, approval Approval, now tim
 			return nil, ErrConflict
 		}
 		return executeApprovedInvoiceAction(st, approver, approval, inputs, invoice, now)
-	case "close_subscription":
-		if approval.ResourceType != "subscription" || inputString(inputs, "subscriptionId") != approval.ResourceID || !exactApprovalKeys(inputs, "action", "subscriptionId", "resourceType", "resourceId", "resourceVersion") {
+	case "close_subscription", "pause_subscription", "resume_subscription", "renew_subscription":
+		expectedKeys := []string{"action", "subscriptionId", "resourceType", "resourceId", "resourceVersion"}
+		if approval.Action == "renew_subscription" {
+			expectedKeys = append(expectedKeys, "startDate")
+		}
+		if approval.ResourceType != "subscription" || inputString(inputs, "subscriptionId") != approval.ResourceID || !exactApprovalKeys(inputs, expectedKeys...) {
 			return nil, ErrConflict
 		}
 		sub, ok := st.Subscriptions[approval.ResourceID]
@@ -51,14 +55,67 @@ func executeApprovedAction(st *State, approver Actor, approval Approval, now tim
 			return nil, ErrConflict
 		}
 		plan, ok := st.Plans[sub.PlanID]
-		if !ok || plan.BusinessID != approval.BusinessID || !plan.AllowEarlyClose || (sub.Status != "Active" && sub.Status != "Paused" && sub.Status != "Confirmed") {
+		if !ok || plan.BusinessID != approval.BusinessID {
 			return nil, ErrConflict
 		}
-		sub.Status = "Closed"
+		switch approval.Action {
+		case "close_subscription":
+			if !plan.AllowEarlyClose || (sub.Status != "Active" && sub.Status != "Paused" && sub.Status != "Confirmed") {
+				return nil, ErrConflict
+			}
+			sub.Status = "Closed"
+		case "pause_subscription":
+			if !plan.AllowPause || sub.Status != "Active" {
+				return nil, ErrConflict
+			}
+			sub.Status = "Paused"
+			sub.PauseIntervals = append(sub.PauseIntervals, PauseInterval{Start: now})
+		case "resume_subscription":
+			if !plan.AllowPause || sub.Status != "Paused" {
+				return nil, ErrConflict
+			}
+			sub.Status = "Active"
+			if len(sub.PauseIntervals) > 0 {
+				end := now
+				sub.PauseIntervals[len(sub.PauseIntervals)-1].End = &end
+			}
+		case "renew_subscription":
+			if !plan.AllowRenew || sub.Status != "Closed" {
+				return nil, ErrConflict
+			}
+			location, err := time.LoadLocation(st.Businesses[approval.BusinessID].Timezone)
+			if err != nil {
+				return nil, ErrConflict
+			}
+			startDate := inputString(inputs, "startDate")
+			if startDate != now.In(location).Format("2006-01-02") {
+				return nil, ErrConflict
+			}
+			if _, err := time.Parse("2006-01-02", startDate); err != nil {
+				return nil, ErrConflict
+			}
+			sub.Status = "Draft"
+			sub.StartDate = startDate
+			if sub.ExpiryDate != "" && sub.ExpiryDate < startDate {
+				sub.ExpiryDate = ""
+			}
+			sub.BillingCursor = nil
+		}
 		sub.Version++
 		st.Subscriptions[sub.ID] = sub
-		st.Audit = append(st.Audit, auditEvent(approver, "subscription.close", "subscription", sub.ID, map[string]any{"version": sub.Version, "approvalId": approval.ID}))
-		return map[string]any{"executed": true, "action": approval.Action, "resourceType": "subscription", "resourceId": sub.ID, "status": sub.Status, "version": sub.Version}, nil
+		domainAction := map[string]string{
+			"close_subscription":  "close",
+			"pause_subscription":  "pause",
+			"resume_subscription": "resume",
+			"renew_subscription":  "renew",
+		}[approval.Action]
+		st.Audit = append(st.Audit, auditEvent(approver, "subscription."+domainAction, "subscription", sub.ID, map[string]any{"version": sub.Version, "approvalId": approval.ID}))
+		result := map[string]any{"executed": true, "action": approval.Action, "resourceType": "subscription", "resourceId": sub.ID, "status": sub.Status, "version": sub.Version}
+		if approval.Action == "renew_subscription" {
+			result["startDate"] = sub.StartDate
+			result["expiryDate"] = sub.ExpiryDate
+		}
+		return result, nil
 	default:
 		return nil, fmt.Errorf("%w: unsupported approved action", ErrValidation)
 	}

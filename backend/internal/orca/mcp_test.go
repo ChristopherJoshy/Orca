@@ -22,6 +22,8 @@ import (
 
 func TestMCPAuthorizationPKCEAndStreamableTools(t *testing.T) {
 	_, store, handler, baseURL, sessionToken := newMCPTestServer(t)
+	store.state.Plans["plan-mcp-a"] = Plan{ID: "plan-mcp-a", BusinessID: "biz-mcp-a", AllowPause: true}
+	store.state.Subscriptions["sub-mcp-a"] = Subscription{ID: "sub-mcp-a", BusinessID: "biz-mcp-a", CustomerID: "customer-mcp-a", PlanID: "plan-mcp-a", Status: "Active", Version: 3}
 	ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
 	defer cancel()
 
@@ -120,7 +122,7 @@ func TestMCPAuthorizationPKCEAndStreamableTools(t *testing.T) {
 	if err != nil || crossTenant == nil || !crossTenant.IsError {
 		t.Fatalf("cross-business invoice should be hidden: result=%#v err=%v", crossTenant, err)
 	}
-	proposalResult, err := session.CallTool(ctx, &mcp.CallToolParams{Name: "request_action_review", Arguments: map[string]any{"action": "confirm_invoice", "invoiceId": "invoice-mcp-a"}})
+	proposalResult, err := session.CallTool(ctx, &mcp.CallToolParams{Name: "request_action_review", Arguments: map[string]any{"action": "pause_subscription", "subscriptionId": "sub-mcp-a"}})
 	if err != nil || proposalResult == nil || proposalResult.IsError {
 		var detail string
 		if proposalResult != nil && len(proposalResult.Content) > 0 {
@@ -131,20 +133,16 @@ func TestMCPAuthorizationPKCEAndStreamableTools(t *testing.T) {
 		t.Fatalf("pending proposal call failed: result=%#v err=%v detail=%s", proposalResult, err, detail)
 	}
 	if err := store.Read(ctx, func(st *State) error {
-		invoice := st.Invoices["invoice-mcp-a"]
-		if invoice.Status != "Draft" {
-			return fmt.Errorf("proposal mutated invoice to %s", invoice.Status)
+		sub := st.Subscriptions["sub-mcp-a"]
+		if sub.Status != "Active" || sub.Version != 3 {
+			return fmt.Errorf("external proposal mutated subscription: %+v", sub)
 		}
-		found := false
 		for _, approval := range st.Approvals {
-			if approval.ResourceID == invoice.ID && approval.Status == "Pending" {
-				found = true
+			if approval.ResourceID == sub.ID && approval.Status == "Pending" && approval.Action == "pause_subscription" {
+				return nil
 			}
 		}
-		if !found {
-			return errors.New("proposal did not create a pending approval")
-		}
-		return nil
+		return errors.New("external lifecycle action did not create an ORCA approval")
 	}); err != nil {
 		t.Fatal(err)
 	}

@@ -108,9 +108,9 @@ var groqAgentTools = []groqTool{
 		Type: "function",
 		Function: groqFunction{
 			Name:        "request_action_review",
-			Description: "Prepare one exact consequential action for ORCA review. It never executes the action. Supported actions: confirm_invoice, cancel_invoice, send_invoice, record_payment, close_subscription.",
+			Description: "Prepare one exact consequential action for ORCA review. It never executes the action. Supported actions: confirm_invoice, cancel_invoice, send_invoice, record_payment, close_subscription, pause_subscription, resume_subscription, renew_subscription.",
 			Parameters: objectSchema(map[string]any{
-				"action":         enumSchema("confirm_invoice", "cancel_invoice", "send_invoice", "record_payment", "close_subscription"),
+				"action":         enumSchema("confirm_invoice", "cancel_invoice", "send_invoice", "record_payment", "close_subscription", "pause_subscription", "resume_subscription", "renew_subscription"),
 				"invoiceId":      map[string]any{"type": "string", "maxLength": 64},
 				"subscriptionId": map[string]any{"type": "string", "maxLength": 64},
 				"amount":         map[string]any{"type": "string", "pattern": "^[0-9]+(?:\\.[0-9]{1,6})?$"},
@@ -802,7 +802,7 @@ func (a *API) createAgentApproval(ctx context.Context, actor Actor, args actionR
 			if args.Action != "record_payment" && args.OperationKey != "" {
 				return fmt.Errorf("operationKey is only valid for record_payment")
 			}
-		case "close_subscription":
+		case "close_subscription", "pause_subscription", "resume_subscription", "renew_subscription":
 			if args.SubscriptionID == "" || args.InvoiceID != "" || args.Amount != "" || args.Method != "" || args.Date != "" || args.Note != "" || args.OperationKey != "" {
 				return fmt.Errorf("subscriptionId is required and other resource or payment fields must be empty")
 			}
@@ -814,11 +814,29 @@ func (a *API) createAgentApproval(ctx context.Context, actor Actor, args actionR
 			if !ok {
 				return ErrNotFound
 			}
-			if (sub.Status != "Active" && sub.Status != "Paused" && sub.Status != "Confirmed") || !plan.AllowEarlyClose {
+			allowed := false
+			switch args.Action {
+			case "close_subscription":
+				allowed = plan.AllowEarlyClose && (sub.Status == "Active" || sub.Status == "Paused" || sub.Status == "Confirmed")
+			case "pause_subscription":
+				allowed = plan.AllowPause && sub.Status == "Active"
+			case "resume_subscription":
+				allowed = plan.AllowPause && sub.Status == "Paused"
+			case "renew_subscription":
+				allowed = plan.AllowRenew && sub.Status == "Closed"
+			}
+			if !allowed {
 				return ErrConflict
 			}
 			resourceType, resourceID, version = "subscription", sub.ID, sub.Version
 			inputs["subscriptionId"] = sub.ID
+			if args.Action == "renew_subscription" {
+				location, err := time.LoadLocation(st.Businesses[actor.BusinessID].Timezone)
+				if err != nil {
+					return fmt.Errorf("%w: invalid business timezone", ErrValidation)
+				}
+				inputs["startDate"] = now.In(location).Format("2006-01-02")
+			}
 		default:
 			return fmt.Errorf("unsupported review action")
 		}

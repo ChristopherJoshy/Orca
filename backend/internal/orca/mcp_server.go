@@ -68,9 +68,9 @@ type mcpAuthorizationCode struct {
 }
 
 type mcpActionReviewInput struct {
-	Action         string `json:"action" jsonschema:"supported review action: confirm_invoice, cancel_invoice, send_invoice, record_payment, or close_subscription"`
+	Action         string `json:"action" jsonschema:"supported review action: confirm_invoice, cancel_invoice, send_invoice, record_payment, close_subscription, pause_subscription, resume_subscription, or renew_subscription"`
 	InvoiceID      string `json:"invoiceId,omitempty" jsonschema:"invoice ID for invoice actions"`
-	SubscriptionID string `json:"subscriptionId,omitempty" jsonschema:"subscription ID for close_subscription"`
+	SubscriptionID string `json:"subscriptionId,omitempty" jsonschema:"subscription ID for subscription lifecycle actions"`
 	Amount         string `json:"amount,omitempty" jsonschema:"decimal string amount for record_payment"`
 	Method         string `json:"method,omitempty" jsonschema:"payment method for record_payment"`
 	Date           string `json:"date,omitempty" jsonschema:"payment date for record_payment"`

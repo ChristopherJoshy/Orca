@@ -122,6 +122,56 @@ func TestAgentCustomerCannotPrepareActionReview(t *testing.T) {
 	}
 }
 
+func TestAgentLifecycleReviewProposalsCheckPlanPolicyWithoutWriting(t *testing.T) {
+	api, admin := newAgentToolTestAPI()
+	api.Store.state.Plans["plan-a"] = Plan{ID: "plan-a", BusinessID: admin.BusinessID, AllowPause: true, AllowRenew: true}
+	api.Store.state.Subscriptions["sub-pause"] = Subscription{ID: "sub-pause", BusinessID: admin.BusinessID, PlanID: "plan-a", Status: "Active", Version: 3}
+	api.Store.state.Subscriptions["sub-resume"] = Subscription{ID: "sub-resume", BusinessID: admin.BusinessID, PlanID: "plan-a", Status: "Paused", Version: 5}
+	api.Store.state.Subscriptions["sub-renew"] = Subscription{ID: "sub-renew", BusinessID: admin.BusinessID, PlanID: "plan-a", Status: "Closed", StartDate: "2025-01-01", ExpiryDate: "2025-12-31", Version: 8}
+
+	for _, test := range []struct {
+		action  string
+		id      string
+		status  string
+		version int64
+	}{
+		{action: "pause_subscription", id: "sub-pause", status: "Active", version: 3},
+		{action: "resume_subscription", id: "sub-resume", status: "Paused", version: 5},
+		{action: "renew_subscription", id: "sub-renew", status: "Closed", version: 8},
+	} {
+		id, proposal, err := api.createAgentApproval(context.Background(), admin, actionReviewArguments{Action: test.action, SubscriptionID: test.id})
+		if err != nil {
+			t.Fatalf("%s proposal failed: %v", test.action, err)
+		}
+		approval := api.Store.state.Approvals[id]
+		inputs := approval.Inputs.(map[string]any)
+		wantHash, _, err := canonicalHash(inputs)
+		if err != nil || approval.InputsHash != wantHash {
+			t.Fatalf("%s proposal is not bound to its exact inputs: hash=%s want=%s err=%v", test.action, approval.InputsHash, wantHash, err)
+		}
+		if proposal["executed"] != false || approval.ResourceType != "subscription" || approval.ResourceID != test.id || approval.ResourceVersion != test.version {
+			t.Fatalf("%s proposal has wrong target/version or claims execution: approval=%+v proposal=%#v", test.action, approval, proposal)
+		}
+		if approval.Status != "Pending" || api.Store.state.Subscriptions[test.id].Status != test.status || api.Store.state.Subscriptions[test.id].Version != test.version {
+			t.Fatalf("%s proposal changed subscription state: approval=%+v subscription=%+v", test.action, approval, api.Store.state.Subscriptions[test.id])
+		}
+		if test.action == "renew_subscription" {
+			if date, ok := inputs["startDate"].(string); !ok || date == "" {
+				t.Fatalf("renew proposal did not bind its proposed start date: %#v", inputs)
+			}
+			wire := approvalWire(approval)
+			if wire["title"] != "Renew subscription" || !strings.Contains(fmt.Sprint(wire["detail"]), fmt.Sprint(inputs["startDate"])) {
+				t.Fatalf("review does not show the renewal and exact start date: %#v", wire)
+			}
+		}
+	}
+
+	api.Store.state.Plans["plan-a"] = Plan{ID: "plan-a", BusinessID: admin.BusinessID, AllowPause: false, AllowRenew: true}
+	if _, _, err := api.createAgentApproval(context.Background(), admin, actionReviewArguments{Action: "pause_subscription", SubscriptionID: "sub-pause"}); err != ErrConflict {
+		t.Fatalf("pause proposal with plan permission disabled returned %v, want conflict", err)
+	}
+}
+
 func TestGroqToolCallingLoopPersistsProgressWithoutProviderKey(t *testing.T) {
 	api, admin := newAgentToolTestAPI()
 	api.Store.state.AgentRuns["run-a"] = AgentRun{ID: "run-a", BusinessID: admin.BusinessID, UserID: admin.UserID, Status: "Running", Transcript: []any{map[string]any{"role": "user", "content": "Summarize billing."}}}
