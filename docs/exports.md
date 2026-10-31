@@ -1,5 +1,7 @@
 # Data exports
 
+The Reports page can also download the selected Revenue, Invoicing, Collections, or Receivables view as CSV. It uses the same date-filtered records shown in the current tab, includes the selected range, and neutralizes formula/control prefixes for spreadsheet safety. This concise report download is separate from the versioned full/filtered business ZIP below.
+
 ## Current implementation
 
 The API creates a full business or filtered ZIP from one store read boundary. PostgreSQL reads use a repeatable-read transaction; the file is generated asynchronously in the API process and retained locally. The archive contains versioned JSON datasets, customer/invoice/payment CSV files, printable invoice HTML, a manifest, record counts, and SHA-256 checksums. JSON values remain unchanged; CSV cells beginning with formula/control prefixes are escaped.

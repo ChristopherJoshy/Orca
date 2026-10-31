@@ -1,8 +1,9 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { ApiError, apiRequest } from './api';
-import { customerFor, isOverdue, money, outstanding, shortMoney, type Approval, type Invoice, type WorkspaceData, type Money, toPaise, addMoney, ratioMoney } from './model';
+import { customerFor, isOverdue, money, outstanding, shortMoney, type Approval, type Invoice, type Plan, type Product, type WorkspaceData, type Money, toPaise, addMoney, ratioMoney } from './model';
 import { Avatar, Badge, Button, Card, EmptyState, PageHeading } from './ui';
 import { Icon } from './icons';
+import { downloadReportCsv, type ReportExportKind } from './reportExport';
 
 export type PageKey = 'overview' | 'customers' | 'catalog' | 'plans' | 'quotations' | 'subscriptions' | 'invoices' | 'invoice' | 'payments' | 'reports' | 'settings' | 'discounts' | 'taxes' | 'staff' | 'exports' | 'copilot' | 'portal';
 export type PageActions = {
@@ -21,6 +22,11 @@ export type PageActions = {
   downloadExport: (jobId: string) => void;
   runBilling: () => Promise<number | null>;
   decideApproval: (approval: Approval, decision: 'approve' | 'reject') => void;
+  canManageCatalog: boolean;
+  editProduct: (product: Product) => void;
+  archiveProduct: (product: Product) => void;
+  editPlan: (plan: Plan) => void;
+  archivePlan: (plan: Plan) => void;
   search: string;
   setSearch: (value: string) => void;
 };
@@ -154,12 +160,12 @@ export function CustomersPage({ data, actions }: { data: WorkspaceData; actions:
 
 export function CatalogPage({ data, actions }: { data: WorkspaceData; actions: PageActions }) {
   const rows = data.products.filter((product) => `${product.name} ${product.type} ${product.notes}`.toLowerCase().includes(actions.search.toLowerCase()));
-  return <><PageHeading eyebrow="Offerings" title="Catalog" description="Your products and services, with flexible variants and clear pricing." actions={<Button variant="primary" icon="plus" onClick={() => actions.create('product')}>Add product</Button>} /><div className="catalog-summary"><Card className="catalog-intro"><div className="catalog-icon"><Icon name="catalog" size={22} /></div><div><h2>Product catalog</h2><p>Products are the building blocks of your plans. Variant adjustments are added to the base price.</p></div></Card><Card className="catalog-stat"><span>Active products</span><strong>{data.products.filter((p) => p.active).length}</strong></Card><Card className="catalog-stat"><span>Active variants</span><strong>{data.products.reduce((sum, p) => sum + p.variants.length, 0)}</strong></Card></div><Card className="catalog-list-card"><TableToolbar title="All products" count={`${rows.length} products`} search={actions.search} setSearch={actions.setSearch} /><TableWrap><thead><tr><th>Product</th><th>Type</th><th>Variants</th><th>Sales price</th><th>Cost price</th><th>Margin</th><th>Tax rate</th><th>Status</th><th><span className="sr-only">Product actions</span></th></tr></thead><tbody>{rows.map((product) => <tr key={product.id}><td><div className="product-cell"><span className="product-thumb"><Icon name="catalog" size={17} /></span><span><strong>{product.name}</strong><small>{product.notes}</small></span></div></td><td>{product.type}</td><td>{product.variants.length ? product.variants.map((v) => <span className="variant-chip" key={v.name}>{v.name} {toPaise(v.adjustment) > 0n && <small>+{money(v.adjustment)}</small>}</span>) : <span className="muted">—</span>}</td><td><CellMoney value={product.price} strong /></td><td><CellMoney value={product.cost} /></td><td><span className="margin-pill">{marginPercent(product.price, product.cost)}</span></td><td>{rateText(product.taxRateBps)}</td><td><Status value={product.active ? 'Active' : 'Paused'} /></td><td><button type="button" className="icon-button" aria-label={`Edit ${product.name}`}><Icon name="more" /></button></td></tr>)}</tbody></TableWrap>{rows.length === 0 && <EmptyState icon="catalog" title="No products found" description="Try a different search or add your first product." />}</Card></>;
+  return <><PageHeading eyebrow="Offerings" title="Catalog" description="Your products and services, with flexible variants and clear pricing." actions={actions.canManageCatalog && <Button variant="primary" icon="plus" onClick={() => actions.create('product')}>Add product</Button>} /><div className="catalog-summary"><Card className="catalog-intro"><div className="catalog-icon"><Icon name="catalog" size={22} /></div><div><h2>Product catalog</h2><p>Products are the building blocks of your plans. Variant adjustments are added to the base price.</p></div></Card><Card className="catalog-stat"><span>Active products</span><strong>{data.products.filter((p) => p.active).length}</strong></Card><Card className="catalog-stat"><span>Active variants</span><strong>{data.products.reduce((sum, p) => sum + p.variants.length, 0)}</strong></Card></div><Card className="catalog-list-card"><TableToolbar title="All products" count={`${rows.length} products`} search={actions.search} setSearch={actions.setSearch} /><TableWrap><thead><tr><th>Product</th><th>Type</th><th>Variants</th><th>Sales price</th><th>Cost price</th><th>Margin</th><th>Tax rate</th><th>Status</th>{actions.canManageCatalog && <th><span className="sr-only">Product actions</span></th>}</tr></thead><tbody>{rows.map((product) => <tr key={product.id}><td><div className="product-cell"><span className="product-thumb"><Icon name="catalog" size={17} /></span><span><strong>{product.name}</strong><small>{product.notes}</small></span></div></td><td>{product.type}</td><td>{product.variants.length ? product.variants.map((v, index) => <span className="variant-chip" key={`${v.attributeName ?? v.name}-${v.value}-${index}`}>{v.attributeName && v.attributeName !== v.value ? `${v.attributeName} · ${v.value}` : v.name} {toPaise(v.adjustment) > 0n && <small>+{money(v.adjustment)}</small>}</span>) : <span className="muted">—</span>}</td><td><CellMoney value={product.price} strong /></td><td><CellMoney value={product.cost} /></td><td><span className="margin-pill">{marginPercent(product.price, product.cost)}</span></td><td>{rateText(product.taxRateBps)}</td><td><Status value={product.active ? 'Active' : 'Paused'} /></td>{actions.canManageCatalog && <td><div className="catalog-row-actions"><button type="button" className="small-action" aria-label={`Edit ${product.name}`} onClick={() => actions.editProduct(product)}>Edit</button><button type="button" className="small-action catalog-archive-action" aria-label={`Archive ${product.name}`} onClick={() => actions.archiveProduct(product)}>Archive</button></div></td>}</tr>)}</tbody></TableWrap>{rows.length === 0 && <EmptyState icon="catalog" title="No products found" description="Try a different search or add your first product." />}</Card></>;
 }
 
 export function PlansPage({ data, actions }: { data: WorkspaceData; actions: PageActions }) {
   const rows = data.plans.filter((plan) => `${plan.name} ${plan.cadence}`.toLowerCase().includes(actions.search.toLowerCase()));
-  return <><PageHeading eyebrow="Billing setup" title="Plans" description="Set billing frequency, availability, and lifecycle rules for each plan." actions={<Button variant="primary" icon="plus" onClick={() => actions.create('plan')}>Create plan</Button>} /><div className="plan-grid">{rows.map((plan) => <Card className="plan-card" key={plan.id}><div className="plan-card-top"><div className="plan-mark"><Icon name="plans" size={19} /></div><Status value={plan.active ? 'Active' : 'Paused'} /></div><div className="eyebrow">{plan.cadence} billing</div><h2>{plan.name}</h2><div className="plan-price"><strong>{money(plan.price)}</strong><span>/{plan.cadence === 'Yearly' ? 'year' : plan.cadence === 'Monthly' ? 'month' : plan.cadence === 'Weekly' ? 'week' : 'day'}</span></div><div className="plan-detail"><span>Minimum quantity</span><strong>{plan.minimumQuantity} seats</strong></div><div className="plan-detail"><span>Tax rate</span><strong>{rateText(plan.taxRateBps)}</strong></div><div className="plan-detail"><span>Available since</span><strong>{dateFmt(plan.availableFrom)}</strong></div><div className="plan-policies">{plan.pauseAllowed && <span>Pause</span>}{plan.closeAllowed && <span>Early close</span>}{plan.renewAllowed && <span>Renew</span>}</div><button type="button" className="text-link" onClick={() => actions.navigate('subscriptions')}>View subscriptions <Icon name="arrow" size={15} /></button></Card>)}</div>{rows.length === 0 && <EmptyState icon="plans" title="No plans found" description="Create a plan to offer recurring products and services." action={<Button variant="primary" onClick={() => actions.create('plan')}>Create your first plan</Button>} />}</>;
+  return <><PageHeading eyebrow="Billing setup" title="Plans" description="Set billing frequency, availability, and lifecycle rules for each plan." actions={actions.canManageCatalog && <Button variant="primary" icon="plus" onClick={() => actions.create('plan')}>Create plan</Button>} /><div className="plan-grid">{rows.map((plan) => <Card className="plan-card" key={plan.id}><div className="plan-card-top"><div className="plan-mark"><Icon name="plans" size={19} /></div><Status value={plan.active ? 'Active' : 'Paused'} /></div><div className="eyebrow">{plan.cadence} billing</div><h2>{plan.name}</h2><div className="plan-price"><strong>{money(plan.price)}</strong><span>/{plan.cadence === 'Yearly' ? 'year' : plan.cadence === 'Monthly' ? 'month' : plan.cadence === 'Weekly' ? 'week' : 'day'}</span></div><div className="plan-detail"><span>Minimum quantity</span><strong>{plan.minimumQuantity} seats</strong></div><div className="plan-detail"><span>Tax rate</span><strong>{rateText(plan.taxRateBps)}</strong></div><div className="plan-detail"><span>Available since</span><strong>{dateFmt(plan.availableFrom)}</strong></div><div className="plan-policies">{plan.pauseAllowed && <span>Pause</span>}{plan.closeAllowed && <span>Early close</span>}{plan.renewAllowed && <span>Renew</span>}{plan.autoClose && <span>Auto-close at term end</span>}</div><button type="button" className="text-link" onClick={() => actions.navigate('subscriptions')}>View subscriptions <Icon name="arrow" size={15} /></button>{actions.canManageCatalog && <div className="plan-row-actions"><button type="button" className="small-action" aria-label={`Edit ${plan.name}`} onClick={() => actions.editPlan(plan)}>Edit plan</button><button type="button" className="small-action catalog-archive-action" aria-label={`Archive ${plan.name}`} onClick={() => actions.archivePlan(plan)}>Archive plan</button></div>}</Card>)}</div>{rows.length === 0 && <EmptyState icon="plans" title="No plans found" description="Create a plan to offer recurring products and services." action={actions.canManageCatalog && <Button variant="primary" onClick={() => actions.create('plan')}>Create your first plan</Button>} />}</>;
 }
 
 export function SubscriptionsPage({ data, actions }: { data: WorkspaceData; actions: PageActions }) {
@@ -212,7 +218,7 @@ export function QuotationsPage({ data, actions }: { data: WorkspaceData; actions
     <div className="compact-stats"><Card><span>Open quotations</span><strong>{data.quotations.filter((q) => ['Draft', 'Sent'].includes(q.status)).length}</strong></Card><Card><span>Awaiting response</span><strong>{data.quotations.filter((q) => q.status === 'Sent').length}</strong></Card><Card><span>Accepted</span><strong>{data.quotations.filter((q) => q.status === 'Accepted').length}</strong></Card></div>
     <Card className="quotation-list-card">
       <TableToolbar title="Saved templates" count={`${data.quoteTemplates.length} ${data.quoteTemplates.length === 1 ? 'template' : 'templates'}`} search={actions.search} actions={<Button variant="outline" size="sm" icon="plus" onClick={() => actions.create('quoteTemplate')}>Create template</Button>} />
-      {data.quoteTemplates.length === 0 ? <p className="empty-inline">Save a plan and optional product line to prepare consistent customer offers.</p> : <TableWrap><thead><tr><th>Template</th><th>Billing plan</th><th>Lines</th><th>Offer validity</th></tr></thead><tbody>{data.quoteTemplates.map((template) => <tr key={template.id}><td><strong>{template.name}</strong></td><td>{data.plans.find((plan) => plan.id === template.planId)?.name ?? 'Plan unavailable'}</td><td>{template.lines.map((line) => `${line.name} × ${line.quantity}`).join(' · ')}</td><td>{template.validDays} days</td></tr>)}</tbody></TableWrap>}
+      {data.quoteTemplates.length === 0 ? <p className="empty-inline">Save a plan and optional product line to prepare consistent customer offers.</p> : <TableWrap><thead><tr><th>Template</th><th>Billing plan</th><th>Lines</th><th>Offer validity</th></tr></thead><tbody>{data.quoteTemplates.map((template) => <tr key={template.id}><td><strong>{template.name}</strong></td><td>{data.plans.find((plan) => plan.id === template.planId)?.name ?? 'Plan unavailable'}</td><td>{template.lines.map((line) => `${line.name}${line.variant ? ` · ${line.variant}` : ''} × ${line.quantity}`).join(' · ')}</td><td>{template.validDays} days</td></tr>)}</tbody></TableWrap>}
     </Card>
     <Card className="quotation-list-card"><TableToolbar title="All quotations" count={`${rows.length} quotes`} search={actions.search} setSearch={actions.setSearch} /><TableWrap><thead><tr><th>Quotation</th><th>Customer</th><th>Offer</th><th>Created</th><th>Valid through</th><th>Status</th><th className="align-right">Amount</th><th><span className="sr-only">Quotation actions</span></th></tr></thead><tbody>{rows.map((quote) => <tr key={quote.id}><td><strong className="linkish">{quote.number}</strong></td><td><div className="person-cell"><Avatar initials={customerFor(data, quote.customerId).initials} size="sm" /><span><strong>{customerFor(data, quote.customerId).company}</strong><small>{customerFor(data, quote.customerId).name}</small></span></div></td><td>{quote.title}</td><td>{dateFmt(quote.date)}</td><td>{dateFmt(quote.validUntil)}</td><td><Status value={quote.status} /></td><td className="align-right"><CellMoney value={quote.amount} strong /></td><td>{quote.status === 'Accepted' ? <button type="button" className="small-action" onClick={() => actions.convertQuotation(quote.id)}>Create subscription</button> : quote.status === 'Draft' ? <button type="button" className="small-action" onClick={() => actions.sendQuotation(quote.id)}>Send quotation</button> : <span className="muted">—</span>}</td></tr>)}</tbody></TableWrap>{rows.length === 0 && <EmptyState icon="quotations" title="No quotations yet" description="Prepare an offer for a customer in a few steps." action={<Button variant="primary" onClick={() => actions.create('quotation')}>Create quotation</Button>} />}</Card>
   </>;
@@ -224,16 +230,29 @@ export function PaymentsPage({ data, actions }: { data: WorkspaceData; actions: 
   return <><PageHeading eyebrow="Collections" title="Payments" description="Manual allocations and provider payments reconciled against invoices." actions={<Button variant="primary" icon="plus" onClick={() => actions.create('payment')}>Record payment</Button>} /><div className="compact-stats"><Card><span>Recorded payments</span><strong>{rows.length}</strong></Card><Card><span>Total allocated</span><strong className="small-stat-money">{money(collected)}</strong></Card><Card><span>Payment methods</span><strong>{new Set(data.payments.map((p) => p.method)).size}</strong></Card></div><Card><TableToolbar title="Payment activity" count={`${rows.length} records`} search={actions.search} setSearch={actions.setSearch} /><TableWrap><thead><tr><th>Payment</th><th>Customer</th><th>Invoice</th><th>Method</th><th>Date</th><th>Note</th><th className="align-right">Amount allocated</th></tr></thead><tbody>{rows.map((payment) => { const invoice = data.invoices.find((i) => i.id === payment.invoiceId); return <tr key={payment.id}><td><div className="payment-id"><span className="payment-icon"><Icon name="check" size={15} /></span><strong>{payment.id.toUpperCase()}</strong></div></td><td>{customerFor(data, payment.customerId).company}</td><td><button type="button" className="link-button" onClick={() => invoice && actions.navigate('invoice', invoice.id)}>{invoice?.number ?? '—'}</button></td><td><span className="method-chip">{payment.method}</span></td><td>{dateFmt(payment.date)}</td><td>{payment.note || '—'}</td><td className="align-right"><CellMoney value={payment.amount} strong /></td></tr>; })}</tbody></TableWrap>{rows.length === 0 && <EmptyState icon="payments" title="No payments found" description="Record a payment allocation or adjust the search." />}</Card></>;
 }
 
-type ReportKind = 'Revenue' | 'Invoicing' | 'Collections' | 'Receivables';
+type ReportKind = ReportExportKind;
 type ReportPeriod = 'All time' | 'This month' | 'This quarter' | 'This year';
 type ReportBar = { label: string; display: string; value: bigint; max: bigint };
 
-function reportPeriodStart(period: ReportPeriod, now: Date): string | null {
+function reportBusinessDate(value: string | Date, timezone: string): string {
+  const raw = value instanceof Date ? value.toISOString() : value.trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+  const date = new Date(raw);
+  if (!Number.isFinite(date.getTime())) return '';
+  const partsFor = (timeZone: string) => new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(date);
+  let parts: Intl.DateTimeFormatPart[];
+  try { parts = partsFor(timezone || 'UTC'); } catch { parts = partsFor('UTC'); }
+  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((item) => item.type === type)?.value ?? '';
+  return `${part('year')}-${part('month')}-${part('day')}`;
+}
+
+function reportPeriodStart(period: ReportPeriod, now: Date, timezone: string): string | null {
   if (period === 'All time') return null;
-  const year = now.getUTCFullYear();
-  const month = now.getUTCMonth();
+  const today = reportBusinessDate(now, timezone);
+  const year = Number(today.slice(0, 4));
+  const month = Number(today.slice(5, 7)) - 1;
   const startMonth = period === 'This month' ? month : period === 'This quarter' ? Math.floor(month / 3) * 3 : 0;
-  return new Date(Date.UTC(year, startMonth, 1)).toISOString().slice(0, 10);
+  return `${year}-${String(startMonth + 1).padStart(2, '0')}-01`;
 }
 
 function reportBarPercent(bar: ReportBar): string {
@@ -246,10 +265,10 @@ export function ReportsPage({ data }: { data: WorkspaceData }) {
   const [period, setPeriod] = useState<ReportPeriod>('All time');
   const [report, setReport] = useState<ReportKind>('Revenue');
   const now = new Date();
-  const today = now.toISOString().slice(0, 10);
-  const rangeStart = reportPeriodStart(period, now);
+  const today = reportBusinessDate(now, data.timezone);
+  const rangeStart = reportPeriodStart(period, now, data.timezone);
   const inRange = (date: string) => {
-    const normalized = date.slice(0, 10);
+    const normalized = reportBusinessDate(date, data.timezone);
     return Boolean(normalized) && (!rangeStart || normalized >= rangeStart) && (period === 'All time' || normalized <= today);
   };
   const invoices = data.invoices.filter((invoice) => inRange(invoice.issueDate));
@@ -333,7 +352,7 @@ export function ReportsPage({ data }: { data: WorkspaceData }) {
   const startLabel = rangeStart ? dateFmt(rangeStart) : '';
   const rangeDescription = rangeStart ? startLabel + ' – ' + dateFmt(today) : 'All available records';
   return <>
-    <PageHeading eyebrow="Finance" title="Reports" description="Review recurring revenue, invoice activity, collections, and receivables." actions={<Button variant="outline" icon="download" onClick={() => window.print()}>Print report</Button>} />
+    <PageHeading eyebrow="Finance" title="Reports" description="Review recurring revenue, invoice activity, collections, and receivables." actions={<Button variant="outline" icon="download" onClick={() => downloadReportCsv({ report, period, range: rangeDescription, data, invoices, payments, receivableInvoices, overdueInvoiceIds: overdue.map((invoice) => invoice.id), activeSubscriptionCount: active.length, monthlyRecurringRevenue, invoicedTotal, collectedTotal })}>Export CSV</Button>} />
     <div className="report-toolbar">
       <div className="tab-strip" role="tablist" aria-label="Report type">
         {(['Revenue', 'Invoicing', 'Collections', 'Receivables'] as const).map((item) => <button type="button" role="tab" id={'report-tab-' + item.toLowerCase()} aria-controls="report-results" aria-selected={report === item} className={report === item ? 'tab active-tab' : 'tab'} key={item} onClick={() => setReport(item)}>{item}</button>)}

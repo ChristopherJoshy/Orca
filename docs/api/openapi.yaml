@@ -91,19 +91,113 @@ paths:
               schema: { $ref: '#/components/schemas/ProductPage' }
     post:
       summary: Create a product
+      description: Admin-only. The server stores the product and its additive variants under the current business.
       responses:
         '201': { description: Product created }
         '403': { $ref: '#/components/responses/Forbidden' }
+  /products/{id}:
+    put:
+      summary: Update a product catalog entry
+      description: Admin-only. Replaces mutable catalog terms and increments the optimistic version. Existing subscription and invoice line snapshots are not rewritten.
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [expectedVersion, name, type, salesPrice, costPrice, taxRate]
+              properties:
+                expectedVersion: { type: integer, minimum: 1 }
+                name: { type: string, minLength: 1 }
+                type: { type: string, minLength: 1 }
+                salesPrice: { $ref: '#/components/schemas/Money' }
+                costPrice: { $ref: '#/components/schemas/Money' }
+                notes: { type: string }
+                taxRate: { type: string }
+                variants: { type: array, items: { $ref: '#/components/schemas/ProductVariant' } }
+      responses:
+        '200': { description: Updated product with incremented version }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /products/{id}/archive:
+    post:
+      summary: Archive a product without deleting its history
+      description: Admin-only. Archived products disappear from new catalog selection; existing subscriptions, invoices, and exports retain their references.
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [expectedVersion], properties: { expectedVersion: { type: integer, minimum: 1 } } }
+      responses:
+        '200': { description: Archived product; repeated requests are idempotent }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
   /plans:
     get:
       summary: List billing plans
       responses:
-        '200': { description: Plan page }
+        '200':
+          description: Active plan page
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PlanPage' }
     post:
       summary: Create a plan
+      description: Admin-only. Defines the current business's recurring interval, quantity, availability, and lifecycle policy.
       responses:
         '201': { description: Plan created }
         '403': { $ref: '#/components/responses/Forbidden' }
+  /plans/{id}:
+    put:
+      summary: Update a billing plan
+      description: Admin-only. Mutable terms affect future operations; stored subscription and invoice line terms remain unchanged.
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [expectedVersion, name, interval, salesPrice, minimumQuantity, taxRate]
+              properties:
+                expectedVersion: { type: integer, minimum: 1 }
+                name: { type: string, minLength: 1 }
+                interval: { type: string, enum: [daily, weekly, monthly, yearly] }
+                salesPrice: { $ref: '#/components/schemas/Money' }
+                minimumQuantity: { type: integer, minimum: 1 }
+                availableFrom: { type: string, format: date }
+                availableUntil: { type: string, format: date }
+                taxRate: { type: string }
+                autoClose: { type: boolean }
+                allowEarlyClose: { type: boolean }
+                allowPause: { type: boolean }
+                allowRenew: { type: boolean }
+      responses:
+        '200': { description: Updated plan with incremented version }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /plans/{id}/archive:
+    post:
+      summary: Archive a plan without deleting subscriptions or invoices
+      description: Admin-only. Archived plans disappear from new subscription selection; existing subscriptions continue to reference their stored plan terms.
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [expectedVersion], properties: { expectedVersion: { type: integer, minimum: 1 } } }
+      responses:
+        '200': { description: Archived plan; repeated requests are idempotent }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
   /customers:
     get:
       summary: List authorized business customers
@@ -134,6 +228,7 @@ paths:
                 title: { type: string }
                 validDays: { type: integer, minimum: 1, maximum: 3650 }
                 quantity: { type: integer, minimum: 1 }
+                lines: { type: array, items: { $ref: '#/components/schemas/CommercialLine' }, description: Plan and optional product lines; server resolves names, prices, taxes, and variant adjustments from the current business catalog. }
       responses:
         '201': { description: Quotation prepared }
   /quotation-templates:
@@ -160,6 +255,7 @@ paths:
                 name: { type: string, minLength: 1 }
                 planId: { type: string, format: uuid }
                 productId: { type: string, format: uuid }
+                productVariant: { type: string, description: Catalog variant name or value; its adjustment is snapshotted in the template line. }
                 quantity: { type: integer, minimum: 1, default: 1 }
                 productQuantity: { type: integer, minimum: 1, default: 1 }
                 validDays: { type: integer, minimum: 1, maximum: 3650 }
@@ -195,7 +291,23 @@ paths:
         '200': { description: Subscription page }
     post:
       summary: Prepare subscription draft or convert an accepted quotation
-      description: When quotationId is supplied, the accepted quotation's customer, plan and immutable lines are copied into the draft; successful conversion marks the quotation Converted in the same transaction.
+      description: Direct drafts resolve plan and product names, prices, taxes, and variant adjustments from the current business catalog. When quotationId is supplied, the accepted quotation's customer, plan and immutable lines are copied into the draft; successful conversion marks the quotation Converted in the same transaction.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [customerId, planId, startDate]
+              properties:
+                customerId: { type: string, format: uuid }
+                planId: { type: string, format: uuid }
+                quotationId: { type: string, format: uuid }
+                discountId: { type: string, format: uuid }
+                startDate: { type: string, format: date }
+                expiryDate: { type: string, format: date }
+                paymentTermsDays: { type: integer, minimum: 0, maximum: 365 }
+                lines: { type: array, items: { $ref: '#/components/schemas/CommercialLine' } }
       responses:
         '201': { description: Draft subscription created }
         '409': { $ref: '#/components/responses/Conflict' }
@@ -318,8 +430,21 @@ paths:
   /reports/summary:
     get:
       summary: Business finance and integrity aggregates
+      description: Optional inclusive business-local date filters apply to invoice issue dates and payment received dates. Subscription count and recurring revenue remain current; receivables and overdue counts reflect current balances on invoices issued within the selected range.
+      parameters:
+        - in: query
+          name: from
+          required: false
+          description: Inclusive start date (YYYY-MM-DD) in the business timezone.
+          schema: { type: string, format: date }
+        - in: query
+          name: to
+          required: false
+          description: Inclusive end date (YYYY-MM-DD) in the business timezone.
+          schema: { type: string, format: date }
       responses:
-        '200': { description: Summary with currency and as-of time }
+        '200': { description: Summary with currency, applied filters, and as-of time }
+        '422': { description: Invalid date or reversed date range }
   /exports:
     get:
       summary: List export jobs visible to the current actor
@@ -438,6 +563,17 @@ components:
               quantity: { type: integer, minimum: 1 }
               unitPrice: { $ref: '#/components/schemas/Money' }
               taxRate: { type: string, description: Percentage represented as a decimal string. }
+              variant: { type: string, description: Selected catalog variant value, when applicable. }
+    CommercialLine:
+      type: object
+      required: [quantity]
+      properties:
+        productId: { type: string, format: uuid, description: Omit for the plan line. }
+        name: { type: string, description: Display value is replaced with the catalog name. }
+        quantity: { type: integer, minimum: 1 }
+        unitPrice: { $ref: '#/components/schemas/Money', description: Server re-resolves this from the catalog; client values are not authoritative. }
+        taxRate: { type: string, description: Server re-resolves this from the catalog. }
+        variant: { type: string, description: Catalog variant name or value; its price adjustment is applied server-side. }
     QuoteTemplatePage:
       type: object
       required: [items]
@@ -478,14 +614,47 @@ components:
         salesPrice: { $ref: '#/components/schemas/Money' }
         costPrice: { $ref: '#/components/schemas/Money' }
         notes: { type: string }
-        variants: { type: array, items: { type: object } }
+        variants: { type: array, items: { $ref: '#/components/schemas/ProductVariant' } }
         taxRate: { type: string }
         active: { type: boolean }
+        archived: { type: boolean }
+    ProductVariant:
+      type: object
+      required: [adjustment]
+      properties:
+        name: { type: string }
+        value: { type: string }
+        adjustment: { $ref: '#/components/schemas/Money' }
     ProductPage:
       type: object
       required: [items]
       properties:
         items: { type: array, items: { $ref: '#/components/schemas/Product' } }
+        nextCursor: { type: [string, 'null'] }
+    Plan:
+      type: object
+      required: [id, name, interval, salesPrice, minimumQuantity, version]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        interval: { type: string, enum: [daily, weekly, monthly, yearly] }
+        salesPrice: { $ref: '#/components/schemas/Money' }
+        minimumQuantity: { type: integer, minimum: 1 }
+        availableFrom: { type: string, format: date }
+        availableUntil: { type: string, format: date }
+        taxRate: { type: string }
+        autoClose: { type: boolean }
+        allowEarlyClose: { type: boolean }
+        allowPause: { type: boolean }
+        allowRenew: { type: boolean }
+        active: { type: boolean }
+        archived: { type: boolean }
+        version: { type: integer, minimum: 1 }
+    PlanPage:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/Plan' } }
         nextCursor: { type: [string, 'null'] }
     Invoice:
       type: object

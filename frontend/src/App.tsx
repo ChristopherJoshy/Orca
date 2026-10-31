@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react';
 import { ApiError, apiRequest } from './api';
 import { Icon, type IconName } from './icons';
-import { addMoney, fromPaise, money, multiplyMoney, outstanding, toPaise, type Approval, type Invoice, type TaxRule, type WorkspaceData } from './model';
+import { addMoney, fromPaise, money, multiplyMoney, outstanding, toPaise, type Approval, type Invoice, type Plan, type Product, type TaxRule, type WorkspaceData } from './model';
 import type { PageActions, PageKey } from './pages';
 import { CatalogPage, CopilotPage, CustomersPage, DiscountsPage, ExportsPage, InvoiceTruthPage, InvoicesPage, OverviewPage, PaymentsPage, PlansPage, PortalPage, QuotationsPage, ReportsPage, SettingsPage, StaffPage, SubscriptionsPage, TaxesPage } from './pages';
 import { Avatar, Badge, Button, Dialog, Form, FormActions, IconButton, SelectField, TextField, ToggleField } from './ui';
@@ -27,6 +27,8 @@ const primaryNav: { page: PageKey; icon: IconName }[] = [
 type Route = { page: PageKey; id?: string };
 type ChatMessage = { id: string; role: 'user' | 'assistant'; text: string; time: string };
 type CreateKind = 'customer' | 'product' | 'plan' | 'quotation' | 'quoteTemplate' | 'subscription' | 'discount' | 'staff' | 'tax';
+type CatalogEditTarget = { kind: 'product'; record: Product } | { kind: 'plan'; record: Plan };
+type CatalogArchiveTarget = { kind: 'product'; record: Product } | { kind: 'plan'; record: Plan };
 
 function routeFromLocation(): Route {
   const path = window.location.pathname.replace(/\/$/, '') || '/';
@@ -93,14 +95,15 @@ function CreateRecordDialog({ kind, data, onClose, onSave }: {
   data: WorkspaceData; onClose: () => void; onSave: (values: Record<string, string | boolean>) => Promise<boolean>;
 }) {
   const [values, setValues] = useState<Record<string, string | boolean>>(() => ({
-    name: '', email: '', company: '', phone: '', type: 'Software', price: '', cost: '', notes: '', variantName: '', variantAdjustment: '0.00',
+    name: '', email: '', company: '', phone: '', type: 'Software', price: '', cost: '', notes: '', variantAttribute: '', variantValue: '', variantAdjustment: '0.00',
     taxRate: percentageString(data.taxes.find((tax) => tax.active)?.rateBps ?? 0),
     cadence: 'Monthly', minimumQuantity: '1', availableFrom: new Date().toISOString().slice(0, 10), availableUntil: '',
-    pauseAllowed: true, closeAllowed: true, renewAllowed: true,
+    pauseAllowed: true, closeAllowed: true, autoClose: false, renewAllowed: true,
     customerId: data.customers.at(-1)?.id ?? '', planId: data.plans[0]?.id ?? '', quantity: String(data.plans[0]?.minimumQuantity ?? 1), validDays: '14', title: '', templateId: '',
-    templatePlanId: data.plans[0]?.id ?? '', templateProductId: '', templateQuantity: String(data.plans[0]?.minimumQuantity ?? 1),
+    templatePlanId: data.plans[0]?.id ?? '', templateProductId: '', templateProductVariant: '', templateQuantity: String(data.plans[0]?.minimumQuantity ?? 1),
     paymentTerms: '30', discountKind: 'Percentage', value: '10', scope: 'Subscriptions', minimum: '0.00', usageLimit: '25', endsAt: '',
     startsAt: '',
+    productId: '', productVariant: '', productQuantity: '1',
     region: 'India · Standard rated', rate: '18', role: 'Staff',
   }));
   const [busy, setBusy] = useState(false);
@@ -118,17 +121,22 @@ function CreateRecordDialog({ kind, data, onClose, onSave }: {
   const select = (label: string, key: string, options: { label: string; value: string }[]) => <SelectField label={label} name={key} value={v(key)} onChange={(value) => set(key, value)} options={options} required />;
   const customerOptions = data.customers.map((customer) => ({ label: `${customer.company} · ${customer.name}`, value: customer.id }));
   const planOptions = data.plans.map((plan) => ({ label: `${plan.name} · ${money(plan.price)}`, value: plan.id }));
+  const addOnOptions = data.products.map((product) => ({ label: `${product.name} · ${money(product.price)}`, value: product.id }));
+  const selectedAddOn = data.products.find((product) => product.id === v('productId'));
+  const variantOptions = selectedAddOn?.variants.map((variant) => ({ label: `${variant.name} · ${money(variant.adjustment)} adjustment`, value: variant.value })) ?? [];
+  const selectedTemplateProduct = data.products.find((product) => product.id === v('templateProductId'));
+  const templateVariantOptions = selectedTemplateProduct?.variants.map((variant) => ({ label: `${variant.name} · ${money(variant.adjustment)} adjustment`, value: variant.value })) ?? [];
   const templateOptions = data.quoteTemplates.map((template) => ({ label: `${template.name} · ${template.validDays} days`, value: template.id }));
   const selectedPlanMinimum = Math.max(1, data.plans.find((plan) => plan.id === v('planId'))?.minimumQuantity ?? 1);
   const selectedTemplatePlanMinimum = Math.max(1, data.plans.find((plan) => plan.id === v('templatePlanId'))?.minimumQuantity ?? 1);
   return <Dialog title={title[kind]} description={subtitle[kind]} onClose={onClose}>
     <Form onSubmit={submit}>
       {kind === 'customer' && <div className="form-grid">{text('Contact name', 'name', 'text', 'e.g. Leena Shah')}{text('Email address', 'email', 'email', 'name@company.example')}{text('Company', 'company', 'text', 'Company name')}{text('Phone', 'phone', 'tel', '+91 90000 00000', false)}</div>}
-      {kind === 'product' && <div className="form-grid">{text('Product name', 'name', 'text', 'e.g. Orca Business')}{select('Product type', 'type', ['Software', 'Add-on', 'Service', 'Physical product'].map((value) => ({ label: value, value })))}{text('Sales price · INR', 'price', 'number', '2499.00', true, '0', '0.01')}{text('Cost price · INR', 'cost', 'number', '620.00', true, '0', '0.01')}{text('Tax rate (%)', 'taxRate', 'number', '18.00', true, '0', '0.01')}{text('Notes', 'notes', 'text', 'Optional product notes', false)}<div className="form-section-label">Optional variant</div>{text('Variant or brand', 'variantName', 'text', 'e.g. Enterprise', false)}{text('Price adjustment · INR', 'variantAdjustment', 'number', '560.00', false, '0', '0.01')}</div>}
-      {kind === 'plan' && <><div className="form-grid">{text('Plan name', 'name', 'text', 'Business monthly')}{text('Plan price · INR', 'price', 'number', '2499.00', true, '0', '0.01')}{select('Billing interval', 'cadence', ['Daily', 'Weekly', 'Monthly', 'Yearly'].map((value) => ({ label: value, value })))}{text('Minimum quantity', 'minimumQuantity', 'number', '1', true, '1', '1')}{text('Tax rate (%)', 'taxRate', 'number', '18.00', true, '0', '0.01')}{text('Available from', 'availableFrom', 'date')}{text('Available until', 'availableUntil', 'date', '', false)}</div><div className="form-toggle-stack"><ToggleField label="Allow pause" checked={Boolean(values.pauseAllowed)} onChange={(value) => set('pauseAllowed', value)} /><ToggleField label="Allow early close" checked={Boolean(values.closeAllowed)} onChange={(value) => set('closeAllowed', value)} /><ToggleField label="Allow renewal" checked={Boolean(values.renewAllowed)} onChange={(value) => set('renewAllowed', value)} /></div></>}
-      {kind === 'quotation' && <div className="form-grid">{text('Quotation title', 'title', 'text', 'e.g. Core monthly offer')}{select('Customer', 'customerId', customerOptions)}<SelectField label="Start from a saved template (optional)" name="templateId" value={v('templateId')} onChange={(value) => set('templateId', value)} options={[{ label: 'Choose a plan below', value: '' }, ...templateOptions]} />{!v('templateId') && <>{select('Plan', 'planId', planOptions)}{text(`Quantity · minimum ${selectedPlanMinimum}`, 'quantity', 'number', String(selectedPlanMinimum), true, String(selectedPlanMinimum), '1')}{text('Valid for (days)', 'validDays', 'number', '14', true, '1', '1')}</>}</div>}
-      {kind === 'quoteTemplate' && <div className="form-grid">{text('Template name', 'name', 'text', 'e.g. Business monthly offer')}{select('Billing plan', 'templatePlanId', planOptions)}<SelectField label="Additional product (optional)" name="templateProductId" value={v('templateProductId')} onChange={(value) => set('templateProductId', value)} options={[{ label: 'No additional product', value: '' }, ...data.products.map((product) => ({ label: `${product.name} · ${money(product.price)}`, value: product.id }))]} />{text(`Plan quantity · minimum ${selectedTemplatePlanMinimum}`, 'templateQuantity', 'number', String(selectedTemplatePlanMinimum), true, String(selectedTemplatePlanMinimum), '1')}{text('Offer validity (days)', 'validDays', 'number', '14', true, '1', '1')}</div>}
-      {kind === 'subscription' && <div className="form-grid">{select('Customer', 'customerId', customerOptions)}{select('Plan', 'planId', planOptions)}{text(`Quantity · minimum ${selectedPlanMinimum}`, 'quantity', 'number', String(selectedPlanMinimum), true, String(selectedPlanMinimum), '1')}{select('Payment terms', 'paymentTerms', [{ label: 'Due on receipt', value: '0' }, { label: 'Net 15', value: '15' }, { label: 'Net 30', value: '30' }])}{text('Start date', 'availableFrom', 'date')}</div>}
+      {kind === 'product' && <div className="form-grid">{text('Product name', 'name', 'text', 'e.g. Orca Business')}{select('Product type', 'type', ['Software', 'Add-on', 'Service', 'Physical product'].map((value) => ({ label: value, value })))}{text('Sales price · INR', 'price', 'number', '2499.00', true, '0', '0.01')}{text('Cost price · INR', 'cost', 'number', '620.00', true, '0', '0.01')}{text('Tax rate (%)', 'taxRate', 'number', '18.00', true, '0', '0.01')}{text('Notes', 'notes', 'text', 'Optional product notes', false)}<div className="form-section-label">Optional variant</div>{text('Variant attribute', 'variantAttribute', 'text', 'e.g. Brand', false)}{text('Variant value', 'variantValue', 'text', 'e.g. Odoo', false)}{text('Price adjustment · INR', 'variantAdjustment', 'number', '560.00', false, '0', '0.01')}</div>}
+      {kind === 'plan' && <><div className="form-grid">{text('Plan name', 'name', 'text', 'Business monthly')}{text('Plan price · INR', 'price', 'number', '2499.00', true, '0', '0.01')}{select('Billing interval', 'cadence', ['Daily', 'Weekly', 'Monthly', 'Yearly'].map((value) => ({ label: value, value })))}{text('Minimum quantity', 'minimumQuantity', 'number', '1', true, '1', '1')}{text('Tax rate (%)', 'taxRate', 'number', '18.00', true, '0', '0.01')}{text('Available from', 'availableFrom', 'date')}{text('Available until', 'availableUntil', 'date', '', false)}</div><div className="form-toggle-stack"><ToggleField label="Allow pause" checked={Boolean(values.pauseAllowed)} onChange={(value) => set('pauseAllowed', value)} /><ToggleField label="Allow early close" checked={Boolean(values.closeAllowed)} onChange={(value) => set('closeAllowed', value)} /><ToggleField label="Auto-close at term end" description="Automatically close the subscription when its term ends." checked={Boolean(values.autoClose)} onChange={(value) => set('autoClose', value)} /><ToggleField label="Allow renewal" checked={Boolean(values.renewAllowed)} onChange={(value) => set('renewAllowed', value)} /></div></>}
+      {kind === 'quotation' && <div className="form-grid">{text('Quotation title', 'title', 'text', 'e.g. Core monthly offer')}{select('Customer', 'customerId', customerOptions)}<SelectField label="Start from a saved template (optional)" name="templateId" value={v('templateId')} onChange={(value) => { set('templateId', value); set('productId', ''); set('productVariant', ''); }} options={[{ label: 'Choose a plan below', value: '' }, ...templateOptions]} />{!v('templateId') && <>{select('Plan', 'planId', planOptions)}{text(`Quantity · minimum ${selectedPlanMinimum}`, 'quantity', 'number', String(selectedPlanMinimum), true, String(selectedPlanMinimum), '1')}{text('Valid for (days)', 'validDays', 'number', '14', true, '1', '1')}<SelectField label="Optional product or add-on" name="productId" value={v('productId')} onChange={(value) => { set('productId', value); set('productVariant', ''); }} options={[{ label: 'No additional product', value: '' }, ...addOnOptions]} />{selectedAddOn && <>{variantOptions.length > 0 && <SelectField label="Product variant" name="productVariant" value={v('productVariant')} onChange={(value) => set('productVariant', value)} options={[{ label: 'Base product price', value: '' }, ...variantOptions]} />}{text('Add-on quantity', 'productQuantity', 'number', '1', true, '1', '1')}</>}</>}</div>}
+      {kind === 'quoteTemplate' && <div className="form-grid">{text('Template name', 'name', 'text', 'e.g. Business monthly offer')}{select('Billing plan', 'templatePlanId', planOptions)}<SelectField label="Additional product (optional)" name="templateProductId" value={v('templateProductId')} onChange={(value) => { set('templateProductId', value); set('templateProductVariant', ''); }} options={[{ label: 'No additional product', value: '' }, ...data.products.map((product) => ({ label: `${product.name} · ${money(product.price)}`, value: product.id }))]} />{selectedTemplateProduct && templateVariantOptions.length > 0 && <SelectField label="Product variant" name="templateProductVariant" value={v('templateProductVariant')} onChange={(value) => set('templateProductVariant', value)} options={[{ label: 'Base product price', value: '' }, ...templateVariantOptions]} />}{text(`Plan quantity · minimum ${selectedTemplatePlanMinimum}`, 'templateQuantity', 'number', String(selectedTemplatePlanMinimum), true, String(selectedTemplatePlanMinimum), '1')}{text('Offer validity (days)', 'validDays', 'number', '14', true, '1', '1')}</div>}
+      {kind === 'subscription' && <div className="form-grid">{select('Customer', 'customerId', customerOptions)}{select('Plan', 'planId', planOptions)}{text(`Quantity · minimum ${selectedPlanMinimum}`, 'quantity', 'number', String(selectedPlanMinimum), true, String(selectedPlanMinimum), '1')}{select('Payment terms', 'paymentTerms', [{ label: 'Due on receipt', value: '0' }, { label: 'Net 15', value: '15' }, { label: 'Net 30', value: '30' }])}{text('Start date', 'availableFrom', 'date')}<SelectField label="Optional product or add-on" name="productId" value={v('productId')} onChange={(value) => { set('productId', value); set('productVariant', ''); }} options={[{ label: 'No additional product', value: '' }, ...addOnOptions]} />{selectedAddOn && <>{variantOptions.length > 0 && <SelectField label="Product variant" name="productVariant" value={v('productVariant')} onChange={(value) => set('productVariant', value)} options={[{ label: 'Base product price', value: '' }, ...variantOptions]} />}{text('Add-on quantity', 'productQuantity', 'number', '1', true, '1', '1')}</>}</div>}
       {kind === 'discount' && <div className="form-grid">{text('Discount name', 'name', 'text', 'Annual commitment')}{select('Discount type', 'discountKind', [{ label: 'Percentage', value: 'Percentage' }, { label: 'Fixed amount', value: 'Fixed' }])}{text(values.discountKind === 'Fixed' ? 'Amount · INR' : 'Percentage off', 'value', 'number', values.discountKind === 'Fixed' ? '1500.00' : '10', true, '0', '0.01')}{select('Applies to', 'scope', [{ label: 'Entire subscription', value: 'Subscriptions' }, ...data.products.map((product) => ({ label: product.name, value: product.id }))])}{text('Minimum purchase · INR', 'minimum', 'number', '0.00', true, '0', '0.01')}{text('Minimum quantity', 'minimumQuantity', 'number', '1', true, '1', '1')}{text('Usage limit', 'usageLimit', 'number', '25', true, '1', '1')}{text('Starts on', 'startsAt', 'date', '', false)}{text('Ends on', 'endsAt', 'date', '', false)}</div>}
       {kind === 'staff' && <div className="form-grid">{text('Teammate name', 'name', 'text', 'Sam Patel')}{text('Email on the verified ORCA account', 'email', 'email', 'teammate@company.com')}<p className="form-hint">Ask your teammate to create an ORCA account and verify this exact email first. Adding them grants staff access to this workspace.</p></div>}
       {kind === 'tax' && <div className="form-grid">{text('Tax name', 'name', 'text', 'GST')}{text('Region or treatment', 'region', 'text', 'India · Standard rated')}{text('Rate (%)', 'rate', 'number', '18', true, '0', '0.01')}</div>}
@@ -276,6 +284,107 @@ function ReviewDialog({ value, onClose }: { value: { title: string; description:
   </Dialog>;
 }
 
+type EditableVariant = { attributeName: string; value: string; adjustment: string };
+type ProductEditValues = { name: string; type: string; price: string; cost: string; notes: string; taxRate: string; variants: EditableVariant[] };
+type PlanEditValues = { name: string; price: string; cadence: string; minimumQuantity: string; availableFrom: string; availableUntil: string; taxRate: string; pauseAllowed: boolean; closeAllowed: boolean; autoClose: boolean; renewAllowed: boolean };
+
+function ProductEditDialog({ product, onClose, onSave }: { product: Product; onClose: () => void; onSave: (values: ProductEditValues) => Promise<boolean> }) {
+  const [name, setName] = useState(product.name);
+  const [type, setType] = useState(product.type);
+  const [price, setPrice] = useState(product.price);
+  const [cost, setCost] = useState(product.cost);
+  const [notes, setNotes] = useState(product.notes);
+  const [taxRate, setTaxRate] = useState(percentageString(product.taxRateBps));
+  const [variants, setVariants] = useState<EditableVariant[]>(() => product.variants.map((variant) => ({ attributeName: variant.attributeName ?? variant.name, value: variant.value, adjustment: variant.adjustment })));
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const updateVariant = (index: number, key: keyof EditableVariant, value: string) => setVariants((items) => items.map((item, itemIndex) => itemIndex === index ? { ...item, [key]: value } : item));
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const kept = variants.filter((variant) => variant.attributeName.trim() || variant.value.trim());
+    if (kept.some((variant) => !variant.attributeName.trim() || !variant.value.trim())) {
+      setError('Each variant needs both an attribute and a value. Remove an unused row or complete it.');
+      return;
+    }
+    try {
+      kept.forEach((variant) => toPaise(variant.adjustment));
+      setError(''); setBusy(true);
+      const saved = await onSave({ name, type, price, cost, notes, taxRate, variants: kept.map((variant) => ({ ...variant, attributeName: variant.attributeName.trim(), value: variant.value.trim() })) });
+      setBusy(false);
+      if (saved) onClose();
+    } catch (reason) {
+      setBusy(false);
+      setError(reason instanceof Error ? reason.message : 'Check the product values and try again.');
+    }
+  };
+  return <Dialog title="Edit product" description={`Update ${product.name} and its future catalog pricing.`} onClose={busy ? () => undefined : onClose} wide>
+    <Form onSubmit={(event) => void submit(event)}>
+      <div className="form-grid">
+        <TextField label="Product name" name="edit-product-name" value={name} onChange={setName} required />
+        <SelectField label="Product type" name="edit-product-type" value={type} onChange={setType} options={[...new Set(['Software', 'Add-on', 'Service', 'Physical product', type])].map((value) => ({ label: value, value }))} required />
+        <TextField label="Sales price · INR" name="edit-product-price" type="number" value={price} onChange={setPrice} required min="0" step="0.01" />
+        <TextField label="Cost price · INR" name="edit-product-cost" type="number" value={cost} onChange={setCost} required min="0" step="0.01" />
+        <TextField label="Tax rate (%)" name="edit-product-tax" type="number" value={taxRate} onChange={setTaxRate} required min="0" step="0.01" />
+        <TextField label="Notes" name="edit-product-notes" value={notes} onChange={setNotes} />
+      </div>
+      <div className="variant-edit-heading"><div><strong>Variants</strong><span>Price adjustments are added to the product price.</span></div><Button variant="outline" size="sm" icon="plus" onClick={() => setVariants((items) => [...items, { attributeName: '', value: '', adjustment: '0.00' }])}>Add variant</Button></div>
+      {variants.length > 0 && <div className="variant-edit-list">{variants.map((variant, index) => <div className="variant-edit-row" key={index}><TextField label={`Attribute ${index + 1}`} name={`edit-variant-attribute-${index}`} value={variant.attributeName} onChange={(value) => updateVariant(index, 'attributeName', value)} placeholder="e.g. Brand" /><TextField label={`Value ${index + 1}`} name={`edit-variant-value-${index}`} value={variant.value} onChange={(value) => updateVariant(index, 'value', value)} placeholder="e.g. Odoo" /><TextField label={`Adjustment · INR ${index + 1}`} name={`edit-variant-adjustment-${index}`} type="number" value={variant.adjustment} onChange={(value) => updateVariant(index, 'adjustment', value)} min="0" step="0.01" /><button type="button" className="small-action catalog-archive-action variant-remove-action" aria-label={`Remove variant ${variant.attributeName || index + 1}`} onClick={() => setVariants((items) => items.filter((_, itemIndex) => itemIndex !== index))}>Remove</button></div>)}</div>}
+      {error && <p className="form-error" role="alert">{error}</p>}
+      <FormActions onCancel={onClose} submit={busy ? 'Saving…' : 'Save product'} disabled={busy} />
+    </Form>
+  </Dialog>;
+}
+
+function PlanEditDialog({ plan, onClose, onSave }: { plan: Plan; onClose: () => void; onSave: (values: PlanEditValues) => Promise<boolean> }) {
+  const [name, setName] = useState(plan.name);
+  const [price, setPrice] = useState(plan.price);
+  const [cadence, setCadence] = useState(plan.cadence);
+  const [minimumQuantity, setMinimumQuantity] = useState(String(plan.minimumQuantity));
+  const [availableFrom, setAvailableFrom] = useState(plan.availableFrom);
+  const [availableUntil, setAvailableUntil] = useState(plan.availableUntil);
+  const [taxRate, setTaxRate] = useState(percentageString(plan.taxRateBps));
+  const [pauseAllowed, setPauseAllowed] = useState(plan.pauseAllowed);
+  const [closeAllowed, setCloseAllowed] = useState(plan.closeAllowed);
+  const [autoClose, setAutoClose] = useState(plan.autoClose ?? false);
+  const [renewAllowed, setRenewAllowed] = useState(plan.renewAllowed);
+  const [busy, setBusy] = useState(false);
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault(); setBusy(true);
+    const saved = await onSave({ name, price, cadence, minimumQuantity, availableFrom, availableUntil, taxRate, pauseAllowed, closeAllowed, autoClose, renewAllowed });
+    setBusy(false); if (saved) onClose();
+  };
+  return <Dialog title="Edit plan" description={`Update ${plan.name} for future subscriptions and renewals.`} onClose={busy ? () => undefined : onClose}>
+    <Form onSubmit={(event) => void submit(event)}>
+      <div className="form-grid">
+        <TextField label="Plan name" name="edit-plan-name" value={name} onChange={setName} required />
+        <TextField label="Plan price · INR" name="edit-plan-price" type="number" value={price} onChange={setPrice} required min="0" step="0.01" />
+        <SelectField label="Billing interval" name="edit-plan-interval" value={cadence} onChange={(value) => setCadence(value as Plan['cadence'])} options={['Daily', 'Weekly', 'Monthly', 'Yearly'].map((value) => ({ label: value, value }))} required />
+        <TextField label="Minimum quantity" name="edit-plan-minimum" type="number" value={minimumQuantity} onChange={setMinimumQuantity} required min="1" step="1" />
+        <TextField label="Tax rate (%)" name="edit-plan-tax" type="number" value={taxRate} onChange={setTaxRate} required min="0" step="0.01" />
+        <TextField label="Available from" name="edit-plan-available-from" type="date" value={availableFrom} onChange={setAvailableFrom} />
+        <TextField label="Available until" name="edit-plan-available-until" type="date" value={availableUntil} onChange={setAvailableUntil} />
+      </div>
+      <div className="form-toggle-stack">
+        <ToggleField label="Allow pause" checked={pauseAllowed} onChange={setPauseAllowed} />
+        <ToggleField label="Allow early close" checked={closeAllowed} onChange={setCloseAllowed} />
+        <ToggleField label="Auto-close at term end" description="Automatically close the subscription when its term ends." checked={autoClose} onChange={setAutoClose} />
+        <ToggleField label="Allow renewal" checked={renewAllowed} onChange={setRenewAllowed} />
+      </div>
+      <FormActions onCancel={onClose} submit={busy ? 'Saving…' : 'Save plan'} disabled={busy} />
+    </Form>
+  </Dialog>;
+}
+
+function CatalogArchiveDialog({ target, onClose, onArchive }: { target: CatalogArchiveTarget; onClose: () => void; onArchive: () => Promise<boolean> }) {
+  const [busy, setBusy] = useState(false);
+  const isProduct = target.kind === 'product';
+  const name = target.record.name;
+  return <Dialog title={`Archive ${isProduct ? 'product' : 'plan'}?`} description={`${name} will be removed from future catalog selection.`} onClose={busy ? () => undefined : onClose}>
+    <div className="archive-explanation"><Icon name="shield" size={17} /><p>Existing subscriptions keep their stored terms. Archiving only stops this record from being selected for new subscriptions.</p></div>
+    <div className="form-actions"><Button variant="outline" onClick={onClose} disabled={busy}>Cancel</Button><Button variant="danger" disabled={busy} onClick={async () => { setBusy(true); const archived = await onArchive(); setBusy(false); if (archived) onClose(); }}>{busy ? 'Archiving…' : `Archive ${isProduct ? 'product' : 'plan'}`}</Button></div>
+  </Dialog>;
+}
+
 export default function App() {
   const { data, patch, apiState, dataMode, connectionError, toast, notify, commit, loadInvoice } = useWorkspace();
   const [route, setRoute] = useState<Route>(() => routeFromLocation());
@@ -288,6 +397,8 @@ export default function App() {
   const [newMenuOpen, setNewMenuOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [recordDialog, setRecordDialog] = useState<CreateKind | null>(null);
+  const [catalogEdit, setCatalogEdit] = useState<CatalogEditTarget | null>(null);
+  const [catalogArchive, setCatalogArchive] = useState<CatalogArchiveTarget | null>(null);
   const [paymentInvoice, setPaymentInvoice] = useState<Invoice | null>(null);
   const [profile, setProfile] = useState<{ name: string; email: string; role: string; businessName: string }>({ name: '', email: '', role: 'unknown', businessName: '' });
   const [review, setReview] = useState<{ title: string; description: string; target: string; actionLabel: string; onApprove: () => Promise<boolean> } | null>(null);
@@ -569,16 +680,18 @@ export default function App() {
       }
       if (kind === 'product') {
         const price = fromPaise(toPaise(value('price'))); const cost = fromPaise(toPaise(value('cost'))); const adjustment = fromPaise(toPaise(value('variantAdjustment') || '0.00'));
-        const variants = value('variantName') ? [{ name: value('variantName'), adjustment }] : [];
+        const variantAttribute = value('variantAttribute').trim(); const variantValue = value('variantValue').trim();
+        if (Boolean(variantAttribute) !== Boolean(variantValue)) throw new Error('Enter both the variant attribute and value, or leave both blank.');
+        const variants = variantAttribute ? [{ name: variantAttribute === variantValue ? variantAttribute : `${variantAttribute} · ${variantValue}`, attributeName: variantAttribute, value: variantValue, adjustment }] : [];
         const taxRateBps = percentageBps(value('taxRate'));
-        const product = { id, name: value('name').trim(), type: value('type'), price, cost, notes: value('notes'), variants, taxRateBps, active: true };
-        const body = { name: product.name, type: product.type, salesPrice: price, costPrice: cost, currency: 'INR', notes: product.notes, taxRate: percentageString(taxRateBps), variants: variants.map((variant) => ({ name: variant.name, value: variant.name, adjustment: variant.adjustment })) };
+        const product = { id, name: value('name').trim(), type: value('type'), price, cost, notes: value('notes'), variants, taxRateBps, active: true, version: 1 };
+        const body = { name: product.name, type: product.type, salesPrice: price, costPrice: cost, currency: 'INR', notes: product.notes, taxRate: percentageString(taxRateBps), variants: variants.map((variant) => ({ name: variant.attributeName, value: variant.value, adjustment: variant.adjustment })) };
         return await commit('/products', body, (response) => patch('products', (items) => [...items, { ...product, id: responseId(response, id) }]));
       }
       if (kind === 'plan') {
         const taxRateBps = percentageBps(value('taxRate'));
-        const plan = { id, name: value('name').trim(), price: fromPaise(toPaise(value('price'))), cadence: value('cadence') as WorkspaceData['plans'][number]['cadence'], minimumQuantity: Math.max(1, Number(value('minimumQuantity'))), availableFrom: value('availableFrom'), availableUntil: value('availableUntil'), pauseAllowed: Boolean(values.pauseAllowed), closeAllowed: Boolean(values.closeAllowed), renewAllowed: Boolean(values.renewAllowed), taxRateBps, active: true };
-        const body = { name: plan.name, salesPrice: plan.price, interval: plan.cadence.toLowerCase(), minimumQuantity: plan.minimumQuantity, availableFrom: plan.availableFrom, availableUntil: plan.availableUntil, taxRate: percentageString(taxRateBps), allowPause: plan.pauseAllowed, allowEarlyClose: plan.closeAllowed, allowRenew: plan.renewAllowed };
+        const plan = { id, name: value('name').trim(), price: fromPaise(toPaise(value('price'))), cadence: value('cadence') as WorkspaceData['plans'][number]['cadence'], minimumQuantity: Math.max(1, Number(value('minimumQuantity'))), availableFrom: value('availableFrom'), availableUntil: value('availableUntil'), pauseAllowed: Boolean(values.pauseAllowed), closeAllowed: Boolean(values.closeAllowed), autoClose: Boolean(values.autoClose), renewAllowed: Boolean(values.renewAllowed), taxRateBps, active: true, version: 1 };
+        const body = { name: plan.name, salesPrice: plan.price, interval: plan.cadence.toLowerCase(), minimumQuantity: plan.minimumQuantity, availableFrom: plan.availableFrom, availableUntil: plan.availableUntil, taxRate: percentageString(taxRateBps), autoClose: plan.autoClose, allowPause: plan.pauseAllowed, allowEarlyClose: plan.closeAllowed, allowRenew: plan.renewAllowed };
         return await commit('/plans', body, (response) => patch('plans', (items) => [...items, { ...plan, id: responseId(response, id) }]));
       }
       if (kind === 'quoteTemplate') {
@@ -589,14 +702,16 @@ export default function App() {
         const validDays = Number(value('validDays'));
         if (!Number.isSafeInteger(validDays) || validDays < 1 || validDays > 365) throw new Error('Template validity must be between 1 and 365 days.');
         const product = data.products.find((item) => item.id === value('templateProductId'));
+        const productVariant = product?.variants.find((variant) => variant.value === value('templateProductVariant'));
+        const productUnitPrice = product ? addMoney(product.price, productVariant?.adjustment ?? '0.00') : '0.00';
         const template: WorkspaceData['quoteTemplates'][number] = {
           id, name: value('name').trim(), validDays, planId: plan.id,
           lines: [
             { productId: '', name: plan.name, quantity, unitPrice: plan.price, taxRate: percentageString(plan.taxRateBps) },
-            ...(product ? [{ productId: product.id, name: product.name, quantity: 1, unitPrice: product.price, taxRate: percentageString(product.taxRateBps) }] : []),
+            ...(product ? [{ productId: product.id, name: product.name, quantity: 1, unitPrice: productUnitPrice, taxRate: percentageString(product.taxRateBps), ...(productVariant ? { variant: productVariant.value } : {}) }] : []),
           ],
         };
-        return await commit('/quotation-templates', { name: template.name, validDays, planId: plan.id, productId: product?.id, quantity }, (response) => patch('quoteTemplates', (items) => [...items, { ...template, id: responseId(response, id) }]));
+        return await commit('/quotation-templates', { name: template.name, validDays, planId: plan.id, productId: product?.id, productVariant: productVariant?.value, quantity }, (response) => patch('quoteTemplates', (items) => [...items, { ...template, id: responseId(response, id) }]));
       }
       if (kind === 'quotation' || kind === 'subscription') {
         const customerId = value('customerId');
@@ -605,19 +720,34 @@ export default function App() {
         if (!plan || !customerId) throw new Error('Choose a customer and plan.');
         const quantity = Number(template?.lines.find((line) => !line.productId)?.quantity ?? value('quantity'));
         if (!Number.isSafeInteger(quantity) || quantity < plan.minimumQuantity) throw new Error(`${plan.name} requires a minimum quantity of ${plan.minimumQuantity}.`);
-        const product = data.products[0];
+        const product = kind === 'quotation' && template ? undefined : data.products.find((item) => item.id === value('productId'));
+        const productVariant = product?.variants.find((variant) => variant.value === value('productVariant'));
+        const productQuantity = Number(value('productQuantity') || '1');
+        if (product && (!Number.isSafeInteger(productQuantity) || productQuantity < 1)) throw new Error('Add-on quantity must be a positive whole number.');
+        const productUnitPrice = product ? addMoney(product.price, productVariant?.adjustment ?? '0.00') : '0.00';
+        const productLine = product ? { productId: product.id, name: product.name, quantity: productQuantity, unitPrice: productUnitPrice, taxRate: percentageString(product.taxRateBps), ...(productVariant ? { variant: productVariant.value } : {}) } : undefined;
+        const planLine = { productId: '', name: plan.name, quantity, unitPrice: plan.price, taxRate: percentageString(plan.taxRateBps) };
+        const directLines = [planLine, ...(productLine ? [productLine] : [])];
         if (kind === 'quotation') {
           const validDays = template?.validDays ?? Number(value('validDays'));
           const templateAmount = template?.lines.reduce((sum, line) => addMoney(sum, multiplyMoney(line.unitPrice, line.quantity)), '0.00');
-          const amount = templateAmount ?? multiplyMoney(plan.price, quantity);
+          const amount = templateAmount ?? directLines.reduce((sum, line) => addMoney(sum, multiplyMoney(line.unitPrice, line.quantity)), '0.00');
           const quote = { id, number: `QUO-2026-${String(data.quotations.length + 15).padStart(3, '0')}`, customerId, title: value('title').trim() || `${template?.name ?? plan.name} · ${template ? 'offer' : `${quantity} ${quantity === 1 ? 'seat' : 'seats'}`}`, date: new Date().toISOString().slice(0, 10), validUntil: new Date(Date.now() + validDays * 86400000).toISOString().slice(0, 10), amount, status: 'Draft' };
-          const quoteLines = template ? undefined : [{ productId: product?.id ?? '', name: plan.name, quantity, unitPrice: plan.price, taxRate: percentageString(plan.taxRateBps) }];
+          const quoteLines = template ? undefined : directLines;
           const body = { customerId, planId: plan.id, title: quote.title, validDays, quantity, templateId: template?.id, lines: quoteLines };
-          return await commit('/quotations', body, (response) => patch('quotations', (items) => [...items, { ...quote, id: responseId(response, id) }]));
+          return await commit('/quotations', body, (response) => {
+            const saved = response && typeof response === 'object' ? response as Record<string, unknown> : {};
+            patch('quotations', (items) => [...items, {
+              ...quote, id: responseId(response, id),
+              number: String(saved.number ?? quote.number), title: String(saved.title ?? quote.title),
+              date: String(saved.date ?? quote.date), validUntil: String(saved.validUntil ?? quote.validUntil),
+              amount: String(saved.amount ?? quote.amount), status: String(saved.status ?? quote.status),
+            }]);
+          });
         }
-        const amount = multiplyMoney(plan.price, quantity);
+        const amount = directLines.reduce((sum, line) => addMoney(sum, multiplyMoney(line.unitPrice, line.quantity)), '0.00');
         const subscription = { id, number: `SUB-${1049 + data.subscriptions.length}`, customerId, planId: plan.id, status: 'Draft' as const, startedAt: value('availableFrom'), renewsAt: value('availableUntil'), amount, seats: quantity, paymentTerms: value('paymentTerms') === '0' ? 'Due on receipt' : `Net ${value('paymentTerms')}` };
-        const body = { customerId, planId: plan.id, startDate: subscription.startedAt, expiryDate: subscription.renewsAt || undefined, paymentTermsDays: Number(value('paymentTerms')), lines: product ? [{ productId: product.id, name: product.name, quantity, unitPrice: plan.price, taxRate: percentageString(plan.taxRateBps) }] : [] };
+        const body = { customerId, planId: plan.id, startDate: subscription.startedAt, expiryDate: subscription.renewsAt || undefined, paymentTermsDays: Number(value('paymentTerms')), lines: directLines };
         return await commit('/subscriptions', body, (response) => patch('subscriptions', (items) => [...items, { ...subscription, id: responseId(response, id) }]));
       }
       if (kind === 'discount') {
@@ -658,8 +788,99 @@ export default function App() {
     });
   });
 
+  const saveProduct = async (product: Product, values: ProductEditValues): Promise<boolean> => {
+    try {
+      const salesPrice = fromPaise(toPaise(values.price));
+      const costPrice = fromPaise(toPaise(values.cost));
+      const taxRateBps = percentageBps(values.taxRate);
+      const variants = values.variants.map((variant) => ({
+        name: variant.attributeName,
+        value: variant.value,
+        adjustment: fromPaise(toPaise(variant.adjustment)),
+      }));
+      const expectedVersion = product.version ?? 1;
+      const response = await apiRequest<Record<string, unknown>>(`/products/${encodeURIComponent(product.id)}`, {
+        method: 'PUT',
+        body: JSON.stringify({ expectedVersion, name: values.name.trim(), type: values.type, salesPrice, costPrice, notes: values.notes.trim(), taxRate: percentageString(taxRateBps), variants }),
+      });
+      const updated: Product = {
+        ...product, name: values.name.trim(), type: values.type, price: salesPrice, cost: costPrice,
+        notes: values.notes.trim(), taxRateBps,
+        variants: variants.map((variant) => ({ ...variant, attributeName: variant.name, name: variant.name === variant.value ? variant.name : `${variant.name} · ${variant.value}` })),
+        version: Math.max(expectedVersion + 1, Number(response.version ?? expectedVersion + 1)), active: true,
+      };
+      patch('products', (items) => items.map((item) => item.id === product.id ? updated : item));
+      notify(`Product “${updated.name}” saved.`);
+      return true;
+    } catch (error) {
+      const message = error instanceof ApiError && error.status === 409
+        ? 'Not saved: this product changed elsewhere. Refresh the workspace and review the latest version.'
+        : error instanceof Error ? `Product not saved: ${error.message}` : 'Product not saved. Check the connection and try again.';
+      notify(message);
+      return false;
+    }
+  };
+
+  const savePlan = async (plan: Plan, values: PlanEditValues): Promise<boolean> => {
+    try {
+      const salesPrice = fromPaise(toPaise(values.price));
+      const taxRateBps = percentageBps(values.taxRate);
+      const minimumQuantity = Number(values.minimumQuantity);
+      if (!Number.isSafeInteger(minimumQuantity) || minimumQuantity < 1) throw new Error('Minimum quantity must be a positive whole number.');
+      const expectedVersion = plan.version ?? 1;
+      const response = await apiRequest<Record<string, unknown>>(`/plans/${encodeURIComponent(plan.id)}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          expectedVersion, name: values.name.trim(), interval: values.cadence.toLowerCase(), salesPrice, minimumQuantity,
+          availableFrom: values.availableFrom, availableUntil: values.availableUntil, taxRate: percentageString(taxRateBps),
+          autoClose: values.autoClose, allowEarlyClose: values.closeAllowed, allowPause: values.pauseAllowed, allowRenew: values.renewAllowed,
+        }),
+      });
+      const updated: Plan = {
+        ...plan, name: values.name.trim(), price: salesPrice, cadence: values.cadence as Plan['cadence'], minimumQuantity,
+        availableFrom: values.availableFrom, availableUntil: values.availableUntil, taxRateBps,
+        pauseAllowed: values.pauseAllowed, closeAllowed: values.closeAllowed, autoClose: values.autoClose,
+        renewAllowed: values.renewAllowed, version: Math.max(expectedVersion + 1, Number(response.version ?? expectedVersion + 1)), active: true,
+      };
+      patch('plans', (items) => items.map((item) => item.id === plan.id ? updated : item));
+      notify(`Plan “${updated.name}” saved.`);
+      return true;
+    } catch (error) {
+      const message = error instanceof ApiError && error.status === 409
+        ? 'Not saved: this plan changed elsewhere. Refresh the workspace and review the latest version.'
+        : error instanceof Error ? `Plan not saved: ${error.message}` : 'Plan not saved. Check the connection and try again.';
+      notify(message);
+      return false;
+    }
+  };
+
+  const archiveCatalogRecord = async (target: CatalogArchiveTarget): Promise<boolean> => {
+    const kindName = target.kind === 'product' ? 'Product' : 'Plan';
+    const path = target.kind === 'product' ? 'products' : 'plans';
+    try {
+      await apiRequest(`/${path}/${encodeURIComponent(target.record.id)}/archive`, {
+        method: 'POST', body: JSON.stringify({ expectedVersion: target.record.version ?? 1 }),
+      });
+      if (target.kind === 'product') patch('products', (items) => items.filter((item) => item.id !== target.record.id));
+      else patch('plans', (items) => items.filter((item) => item.id !== target.record.id));
+      notify(`${kindName} archived. Existing subscriptions keep their stored terms.`);
+      return true;
+    } catch (error) {
+      const message = error instanceof ApiError && error.status === 409
+        ? `Not archived: this ${target.kind} changed elsewhere. Refresh the workspace and review the latest version.`
+        : error instanceof Error ? `${kindName} not archived: ${error.message}` : `${kindName} not archived. Check the connection and try again.`;
+      notify(message);
+      return false;
+    }
+  };
+
   const actions: PageActions = {
     navigate, create, confirmInvoice, cancelInvoice, sendInvoice, openPayment, payOnline, transitionSubscription, convertQuotation, acceptQuotation, exportData, downloadExport, runBilling, decideApproval, search, setSearch,
+    canManageCatalog: profile.role === 'admin',
+    editProduct: (product) => setCatalogEdit({ kind: 'product', record: product }),
+    archiveProduct: (product) => setCatalogArchive({ kind: 'product', record: product }),
+    editPlan: (plan) => setCatalogEdit({ kind: 'plan', record: plan }),
+    archivePlan: (plan) => setCatalogArchive({ kind: 'plan', record: plan }),
     sendQuotation: (id: string) => {
       const quote = data.quotations.find((item) => item.id === id); if (!quote) return;
       const customer = data.customers.find((item) => item.id === quote.customerId);
@@ -698,6 +919,8 @@ export default function App() {
   const userName = profile.name || profile.email;
   const userRole = profile.role === 'admin' ? 'Workspace admin' : profile.role === 'staff' ? 'Staff member' : 'Customer';
   const userInitials = initials(profile.name || profile.email || 'Workspace');
+  const newRecordKinds: CreateKind[] = profile.role === 'admin' ? ['customer', 'product', 'plan', 'quotation', 'subscription'] : ['customer', 'quotation', 'subscription'];
+  const toastIsError = Boolean(toast && /not saved|not archived|failed|could not|cannot|unavailable|offline|expired|no changes were saved/i.test(toast));
   if (apiState !== 'online' || dataMode !== 'workspace') {
     return <AuthScreen apiState={apiState} connectionError={connectionError} onRetry={() => window.location.reload()} onAuthenticated={() => window.location.reload()} />;
   }
@@ -718,12 +941,15 @@ export default function App() {
     </aside>
     {mobileNavOpen && <button type="button" className="nav-scrim" aria-label="Close navigation" onClick={() => setMobileNavOpen(false)} />}
     <div className="main-shell">
-      <header className="topbar"><div className="topbar-left"><button ref={mobileMenuButtonRef} type="button" className="icon-button mobile-menu-button" aria-label="Open navigation" aria-expanded={mobileNavOpen} aria-controls="orca-sidebar" onClick={() => setMobileNavOpen(true)}><Icon name="menu" size={18} /></button><div className="breadcrumb"><span>{profile.businessName}</span><Icon name="chevron" size={14} /><strong>{pageTitles[route.page]}</strong></div></div><div className="topbar-actions"><label className="global-search"><Icon name="search" size={16} /><span className="sr-only">Search the current page</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search anything…" /><kbd>⌘ K</kbd></label><Badge tone={apiTone}>{apiLabel}</Badge><div className="topbar-divider" /><IconButton icon="bell" label="Open Copilot approvals" onClick={() => navigate('copilot')} /><div className="top-avatar"><Avatar initials={userInitials} size="sm" /></div><div className="new-menu-wrap"><Button variant="primary" size="sm" icon="plus" onClick={() => setNewMenuOpen(!newMenuOpen)}>New</Button>{newMenuOpen && <div className="new-menu">{(['customer', 'product', 'plan', 'quotation', 'subscription'] as const).map((kind) => <button type="button" key={kind} onClick={() => { setNewMenuOpen(false); create(kind); }}>{`New ${kind}`}</button>)}</div>}</div></div></header>
+      <header className="topbar"><div className="topbar-left"><button ref={mobileMenuButtonRef} type="button" className="icon-button mobile-menu-button" aria-label="Open navigation" aria-expanded={mobileNavOpen} aria-controls="orca-sidebar" onClick={() => setMobileNavOpen(true)}><Icon name="menu" size={18} /></button><div className="breadcrumb"><span>{profile.businessName}</span><Icon name="chevron" size={14} /><strong>{pageTitles[route.page]}</strong></div></div><div className="topbar-actions"><label className="global-search"><Icon name="search" size={16} /><span className="sr-only">Search the current page</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search anything…" /><kbd>⌘ K</kbd></label><Badge tone={apiTone}>{apiLabel}</Badge><div className="topbar-divider" /><IconButton icon="bell" label="Open Copilot approvals" onClick={() => navigate('copilot')} /><div className="top-avatar"><Avatar initials={userInitials} size="sm" /></div><div className="new-menu-wrap"><Button variant="primary" size="sm" icon="plus" onClick={() => setNewMenuOpen(!newMenuOpen)}>New</Button>{newMenuOpen && <div className="new-menu">{newRecordKinds.map((kind) => <button type="button" key={kind} onClick={() => { setNewMenuOpen(false); create(kind); }}>{`New ${kind}`}</button>)}</div>}</div></div></header>
       <main className="page-content"><div className="content-wrap">{page}</div></main>
     </div>
     {recordDialog && <CreateRecordDialog kind={recordDialog} data={data} onClose={() => setRecordDialog(null)} onSave={(values) => saveRecord(recordDialog, values)} />}
+    {catalogEdit?.kind === 'product' && <ProductEditDialog key={`product-${catalogEdit.record.id}`} product={catalogEdit.record} onClose={() => setCatalogEdit(null)} onSave={(values) => saveProduct(catalogEdit.record, values)} />}
+    {catalogEdit?.kind === 'plan' && <PlanEditDialog key={`plan-${catalogEdit.record.id}`} plan={catalogEdit.record} onClose={() => setCatalogEdit(null)} onSave={(values) => savePlan(catalogEdit.record, values)} />}
+    {catalogArchive && <CatalogArchiveDialog key={`${catalogArchive.kind}-${catalogArchive.record.id}`} target={catalogArchive} onClose={() => setCatalogArchive(null)} onArchive={() => archiveCatalogRecord(catalogArchive)} />}
     {paymentInvoice && <PaymentDialog invoice={paymentInvoice} customer={data.customers.find((customer) => customer.id === paymentInvoice.customerId)?.company ?? 'Customer'} onClose={() => setPaymentInvoice(null)} onSave={(values) => savePayment(paymentInvoice, values)} />}
     {review && <ReviewDialog value={review} onClose={() => setReview(null)} />}
-    {toast && <div className="toast" role="status"><Icon name="check" size={16} />{toast}</div>}
+    {toast && <div className={`toast ${toastIsError ? 'toast-error' : ''}`} role={toastIsError ? 'alert' : 'status'}><Icon name={toastIsError ? 'close' : 'check'} size={16} />{toast}</div>}
   </div>;
 }

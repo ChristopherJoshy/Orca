@@ -207,4 +207,22 @@ func TestPostgresHTTPBillingFlow(t *testing.T) {
 	if _, _, err := gateway.lookupGrantByToken(ctx, grantToken); err == nil {
 		t.Fatal("revoked MCP grant still authorized its bearer token")
 	}
+
+	updatedProduct := call(http.MethodPut, "/api/v1/products/"+productID, map[string]any{
+		"expectedVersion": product["version"], "name": "Service updated", "type": "Software", "salesPrice": "120.00", "costPrice": "10.00", "taxRate": "18", "variants": []any{},
+	}, cookie, csrf, 200)
+	updatedPlan := call(http.MethodPut, "/api/v1/plans/"+planID, map[string]any{
+		"expectedVersion": plan["version"], "name": "Monthly updated", "interval": "monthly", "salesPrice": "100.00", "minimumQuantity": 1, "taxRate": "18", "allowPause": true, "allowEarlyClose": true, "allowRenew": true,
+	}, cookie, csrf, 200)
+	call(http.MethodPost, "/api/v1/products/"+productID+"/archive", map[string]any{"expectedVersion": updatedProduct["version"]}, cookie, csrf, 200)
+	call(http.MethodPost, "/api/v1/plans/"+planID+"/archive", map[string]any{"expectedVersion": updatedPlan["version"]}, cookie, csrf, 200)
+	productList := call(http.MethodGet, "/api/v1/products", nil, cookie, "", 200)
+	planList := call(http.MethodGet, "/api/v1/plans", nil, cookie, "", 200)
+	if len(productList["items"].([]any)) != 0 || len(planList["items"].([]any)) != 0 {
+		t.Fatalf("archived catalog records remained visible: products=%#v plans=%#v", productList, planList)
+	}
+	storedSubscription := call(http.MethodGet, "/api/v1/subscriptions", nil, cookie, "", 200)
+	if len(storedSubscription["items"].([]any)) != 2 {
+		t.Fatalf("archiving a plan removed existing subscription references: %#v", storedSubscription)
+	}
 }

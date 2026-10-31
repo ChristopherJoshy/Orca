@@ -145,7 +145,7 @@ func persistStateDiff(ctx context.Context, tx pgx.Tx, before, after *State) erro
 		if ok && reflect.DeepEqual(old, v) {
 			continue
 		}
-		if _, err := tx.Exec(ctx, "INSERT INTO products(id,business_id,name,product_type,sales_price,cost_price,notes,variants,tax_rate,version,created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9,$10,$11) ON CONFLICT (id) DO UPDATE SET name=EXCLUDED.name,product_type=EXCLUDED.product_type,sales_price=EXCLUDED.sales_price,cost_price=EXCLUDED.cost_price,notes=EXCLUDED.notes,variants=EXCLUDED.variants,tax_rate=EXCLUDED.tax_rate,version=EXCLUDED.version", v.ID, v.BusinessID, v.Name, v.Type, v.SalesPrice, v.CostPrice, v.Notes, jsonBytes(v.Variants), v.TaxRate, v.Version, v.CreatedAt); err != nil {
+		if _, err := tx.Exec(ctx, "INSERT INTO products(id,business_id,name,product_type,sales_price,cost_price,notes,variants,tax_rate,version,created_at,archived) VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9,$10,$11,$12) ON CONFLICT (id) DO UPDATE SET name=EXCLUDED.name,product_type=EXCLUDED.product_type,sales_price=EXCLUDED.sales_price,cost_price=EXCLUDED.cost_price,notes=EXCLUDED.notes,variants=EXCLUDED.variants,tax_rate=EXCLUDED.tax_rate,version=EXCLUDED.version,archived=EXCLUDED.archived", v.ID, v.BusinessID, v.Name, v.Type, v.SalesPrice, v.CostPrice, v.Notes, jsonBytes(v.Variants), v.TaxRate, v.Version, v.CreatedAt, v.Archived); err != nil {
 			return err
 		}
 	}
@@ -154,7 +154,7 @@ func persistStateDiff(ctx context.Context, tx pgx.Tx, before, after *State) erro
 		if ok && reflect.DeepEqual(old, v) {
 			continue
 		}
-		if _, err := tx.Exec(ctx, "INSERT INTO plans(id,business_id,name,interval,sales_price,minimum_quantity,available_from,available_until,tax_rate,auto_close,allow_early_close,allow_pause,allow_renew,version,created_at) VALUES ($1,$2,$3,$4,$5,$6,NULLIF($7,'')::date,NULLIF($8,'')::date,$9,$10,$11,$12,$13,$14,$15) ON CONFLICT (id) DO UPDATE SET name=EXCLUDED.name,interval=EXCLUDED.interval,sales_price=EXCLUDED.sales_price,minimum_quantity=EXCLUDED.minimum_quantity,available_from=EXCLUDED.available_from,available_until=EXCLUDED.available_until,tax_rate=EXCLUDED.tax_rate,auto_close=EXCLUDED.auto_close,allow_early_close=EXCLUDED.allow_early_close,allow_pause=EXCLUDED.allow_pause,allow_renew=EXCLUDED.allow_renew,version=EXCLUDED.version", v.ID, v.BusinessID, v.Name, v.Interval, v.SalesPrice, v.MinimumQuantity, v.AvailableFrom, v.AvailableUntil, v.TaxRate, v.AutoClose, v.AllowEarlyClose, v.AllowPause, v.AllowRenew, v.Version, v.CreatedAt); err != nil {
+		if _, err := tx.Exec(ctx, "INSERT INTO plans(id,business_id,name,interval,sales_price,minimum_quantity,available_from,available_until,tax_rate,auto_close,allow_early_close,allow_pause,allow_renew,version,created_at,archived) VALUES ($1,$2,$3,$4,$5,$6,NULLIF($7,'')::date,NULLIF($8,'')::date,$9,$10,$11,$12,$13,$14,$15,$16) ON CONFLICT (id) DO UPDATE SET name=EXCLUDED.name,interval=EXCLUDED.interval,sales_price=EXCLUDED.sales_price,minimum_quantity=EXCLUDED.minimum_quantity,available_from=EXCLUDED.available_from,available_until=EXCLUDED.available_until,tax_rate=EXCLUDED.tax_rate,auto_close=EXCLUDED.auto_close,allow_early_close=EXCLUDED.allow_early_close,allow_pause=EXCLUDED.allow_pause,allow_renew=EXCLUDED.allow_renew,version=EXCLUDED.version,archived=EXCLUDED.archived", v.ID, v.BusinessID, v.Name, v.Interval, v.SalesPrice, v.MinimumQuantity, v.AvailableFrom, v.AvailableUntil, v.TaxRate, v.AutoClose, v.AllowEarlyClose, v.AllowPause, v.AllowRenew, v.Version, v.CreatedAt, v.Archived); err != nil {
 			return err
 		}
 	}

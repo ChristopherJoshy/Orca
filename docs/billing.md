@@ -8,6 +8,7 @@ This document is the source of truth for calculation and posting behavior.
 - Store calculation operands at adequate exact decimal precision. Round each invoice line's payable amount to INR paise using **half-up**; sum stored rounded line amounts for document totals.
 - Calculation order: quantity × exact unit price, apply eligible discounts, floor at zero, calculate tax on the post-discount taxable amount, round line components according to the versioned engine policy, then total stored lines. Tax is after discount.
 - A calculation snapshot captures source catalog/plan/variant/discount/tax versions, quantity, unit amounts, dates, discount allocation, taxable amount, tax rate and amount, line total, currency, engine version, ordered explanation steps, and canonical hash.
+- Quotation lines resolve product and plan prices, taxes, and selected variant adjustments from the business catalog on the server. A quotation's displayed amount includes each line's half-up tax; caller-supplied line prices are never authoritative. Converting an accepted quotation copies its saved commercial terms.
 - Canonical serialization uses sorted keys, normalized decimal strings, UTC timestamps, and a documented hash algorithm. Persist the canonical bytes or enough immutable fields to reproduce them. Explain values from persisted evidence, never a new calculation against current catalog data.
 
 ## Period rules

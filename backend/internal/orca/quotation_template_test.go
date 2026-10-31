@@ -65,7 +65,7 @@ func TestCreateQuotationTemplateAndUseItWithoutCrossTenantLeak(t *testing.T) {
 		}
 		return ""
 	}()]
-	if quote.PlanID != template.PlanID || quote.Title != template.Name || len(quote.Lines) != len(template.Lines) || quote.Amount != "291.25" {
+	if quote.PlanID != template.PlanID || quote.Title != template.Name || len(quote.Lines) != len(template.Lines) || quote.Amount != "338.44" {
 		t.Fatalf("quotation from template = %#v", quote)
 	}
 	wantValidUntil := quote.CreatedAt.AddDate(0, 0, template.ValidDays).Format("2006-01-02")

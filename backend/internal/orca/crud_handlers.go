@@ -32,7 +32,7 @@ func validatePrice(value string) error {
 	return nil
 }
 func (a *API) createProduct(w http.ResponseWriter, r *http.Request, auth Authenticated) {
-	if err := checkActorStaff(auth); err != nil {
+	if err := requireAdmin(auth); err != nil {
 		writeErr(w, err)
 		return
 	}
@@ -45,6 +45,8 @@ func (a *API) createProduct(w http.ResponseWriter, r *http.Request, auth Authent
 		return
 	}
 	v := req.Product
+	// Archive state is controlled only by the archive endpoint, not client create payloads.
+	v.Archived = false
 	if strings.TrimSpace(v.Name) == "" {
 		writeErr(w, fmt.Errorf("%w: name is required", ErrValidation))
 		return
@@ -101,7 +103,7 @@ func (a *API) createProduct(w http.ResponseWriter, r *http.Request, auth Authent
 	writeJSON(w, 201, productWire(v))
 }
 func (a *API) createPlan(w http.ResponseWriter, r *http.Request, auth Authenticated) {
-	if err := checkActorStaff(auth); err != nil {
+	if err := requireAdmin(auth); err != nil {
 		writeErr(w, err)
 		return
 	}
@@ -110,6 +112,8 @@ func (a *API) createPlan(w http.ResponseWriter, r *http.Request, auth Authentica
 		writeErr(w, err)
 		return
 	}
+	// Archive state is controlled only by the archive endpoint, not client create payloads.
+	v.Archived = false
 	v.Name = strings.TrimSpace(v.Name)
 	if v.Name == "" {
 		writeErr(w, fmt.Errorf("%w: name is required", ErrValidation))
@@ -351,6 +355,7 @@ func (a *API) createQuotationTemplate(w http.ResponseWriter, r *http.Request, au
 		Name            string
 		PlanID          string
 		ProductID       string
+		ProductVariant  string
 		Quantity        int
 		ProductQuantity int
 		ValidDays       int
@@ -389,13 +394,15 @@ func (a *API) createQuotationTemplate(w http.ResponseWriter, r *http.Request, au
 		if req.Quantity < plan.MinimumQuantity {
 			return fmt.Errorf("%w: quantity is below the plan minimum", ErrValidation)
 		}
-		template.Lines = append(template.Lines, SubscriptionLine{Name: plan.Name, Quantity: req.Quantity, UnitPrice: money2(plan.SalesPrice), TaxRate: rate2(plan.TaxRate)})
+		lines := []SubscriptionLine{{Name: plan.Name, Quantity: req.Quantity}}
 		if req.ProductID != "" {
-			product, ok := st.Products[req.ProductID]
-			if !ok {
-				return ErrNotFound
-			}
-			template.Lines = append(template.Lines, SubscriptionLine{ProductID: product.ID, Name: product.Name, Quantity: req.ProductQuantity, UnitPrice: money2(product.SalesPrice), TaxRate: rate2(product.TaxRate)})
+			lines = append(lines, SubscriptionLine{ProductID: req.ProductID, Quantity: req.ProductQuantity, Variant: req.ProductVariant})
+		} else if req.ProductVariant != "" {
+			return fmt.Errorf("%w: productVariant requires productId", ErrValidation)
+		}
+		template.Lines, err = canonicalCommercialLines(st, plan, lines, req.Quantity)
+		if err != nil {
+			return err
 		}
 		st.QuoteTemplates[template.ID] = template
 		return nil
@@ -451,10 +458,23 @@ func (a *API) createQuotation(w http.ResponseWriter, r *http.Request, auth Authe
 		if _, ok := st.Customers[v.CustomerID]; !ok {
 			return ErrNotFound
 		}
-		if req.TemplateID != "" && len(v.Lines) == 0 {
+		if req.TemplateID != "" {
 			template, ok := st.QuoteTemplates[req.TemplateID]
 			if !ok {
 				return ErrNotFound
+			}
+			templatePlan, exists := st.Plans[template.PlanID]
+			if !exists || templatePlan.Archived {
+				return ErrNotFound
+			}
+			for _, line := range template.Lines {
+				if line.ProductID == "" {
+					continue
+				}
+				product, exists := st.Products[line.ProductID]
+				if !exists || product.BusinessID != auth.Actor.BusinessID || product.Archived {
+					return ErrNotFound
+				}
 			}
 			if req.PlanID != "" && req.PlanID != template.PlanID {
 				return fmt.Errorf("%w: template plan cannot be overridden", ErrValidation)
@@ -466,6 +486,8 @@ func (a *API) createQuotation(w http.ResponseWriter, r *http.Request, auth Authe
 			if v.Title == "" {
 				v.Title = template.Name
 			}
+			// A template is a saved offer. Ignore client-supplied line prices and
+			// always copy its server-stored terms into the quotation.
 			v.Lines = append([]SubscriptionLine(nil), template.Lines...)
 		}
 		if req.ValidDays == 0 {
@@ -485,6 +507,23 @@ func (a *API) createQuotation(w http.ResponseWriter, r *http.Request, auth Authe
 			}
 			v.Lines = []SubscriptionLine{{Name: plan.Name, Quantity: req.Quantity, UnitPrice: plan.SalesPrice, TaxRate: plan.TaxRate}}
 		}
+		if req.TemplateID == "" {
+			plan, ok := st.Plans[v.PlanID]
+			if !ok {
+				return ErrNotFound
+			}
+			planQuantity := req.Quantity
+			for _, line := range v.Lines {
+				if line.ProductID == "" {
+					planQuantity = line.Quantity
+					break
+				}
+			}
+			v.Lines, err = canonicalCommercialLines(st, plan, v.Lines, planQuantity)
+			if err != nil {
+				return err
+			}
+		}
 		if v.Title == "" {
 			if plan, ok := st.Plans[v.PlanID]; ok {
 				v.Title = fmt.Sprintf("%s · %d", plan.Name, req.Quantity)
@@ -494,10 +533,14 @@ func (a *API) createQuotation(w http.ResponseWriter, r *http.Request, auth Authe
 		}
 		next := len(st.Quotations) + 1
 		v.Number = fmt.Sprintf("QUO-%04d-%04d", now.Year(), next)
-		total := decimal.Zero
 		if len(v.Lines) == 0 {
 			return fmt.Errorf("%w: quotation requires at least one line", ErrValidation)
 		}
+		plan, ok := st.Plans[v.PlanID]
+		if !ok || plan.Archived {
+			return ErrNotFound
+		}
+		calculationLines := make([]CalculationInputLine, 0, len(v.Lines))
 		for _, line := range v.Lines {
 			if line.Quantity < 1 {
 				return fmt.Errorf("%w: line quantity must be positive", ErrValidation)
@@ -505,10 +548,24 @@ func (a *API) createQuotation(w http.ResponseWriter, r *http.Request, auth Authe
 			if err := validatePrice(line.UnitPrice); err != nil {
 				return err
 			}
-			price, _ := ParseDecimal(line.UnitPrice)
-			total = total.Add(price.Mul(decimal.NewFromInt(int64(line.Quantity))))
+			if err := validateRate(line.TaxRate); err != nil {
+				return err
+			}
+			product := st.Products[line.ProductID]
+			if line.ProductID != "" && (product.ID == "" || product.BusinessID != auth.Actor.BusinessID || product.Archived) {
+				return ErrNotFound
+			}
+			calculationLines = append(calculationLines, CalculationInputLine{
+				Product: product, Quantity: line.Quantity, UnitPrice: line.UnitPrice, TaxRate: line.TaxRate,
+				Description: line.Name, Variant: line.Variant, PlanID: v.PlanID, PlanVersion: plan.Version,
+			})
 		}
-		v.Amount = amountString(total)
+		business := st.Businesses[auth.Actor.BusinessID]
+		snapshot, _, err := Calculate(calculationLines, nil, v.BusinessID, v.ID, now, now, business.Timezone)
+		if err != nil {
+			return fmt.Errorf("%w: quotation lines could not be calculated", ErrValidation)
+		}
+		v.Amount = snapshot.Total
 		st.Quotations[v.ID] = v
 		return nil
 	})

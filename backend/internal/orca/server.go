@@ -112,6 +112,10 @@ func newAPI(store *Store, config ServerConfig) *API {
 			r.Post(path, a.protected(true, a.inviteStaff))
 		}
 	}
+	r.Put("/api/v1/products/{id}", a.protected(true, a.updateProduct))
+	r.Post("/api/v1/products/{id}/archive", a.protected(true, a.archiveProduct))
+	r.Put("/api/v1/plans/{id}", a.protected(true, a.updatePlan))
+	r.Post("/api/v1/plans/{id}/archive", a.protected(true, a.archivePlan))
 	r.Post("/api/v1/quotation-templates", a.protected(true, a.createQuotationTemplate))
 	r.Post("/api/v1/staff/invitations", a.protected(true, a.inviteStaff))
 	r.Post("/api/v1/quotations/{id}/send", a.protected(true, a.sendQuotation))
@@ -651,11 +655,15 @@ func collectionItems(st *State, resource string, actor Actor) []any {
 	switch resource {
 	case "products":
 		for _, v := range st.Products {
-			values = append(values, productWire(v))
+			if !v.Archived {
+				values = append(values, productWire(v))
+			}
 		}
 	case "plans":
 		for _, v := range st.Plans {
-			values = append(values, planWire(v))
+			if !v.Archived {
+				values = append(values, planWire(v))
+			}
 		}
 	case "customers":
 		for _, v := range st.Customers {
@@ -734,10 +742,10 @@ func productWire(v Product) map[string]any {
 	for i := range v.Variants {
 		v.Variants[i].Adjustment = money2(v.Variants[i].Adjustment)
 	}
-	return map[string]any{"id": v.ID, "businessId": v.BusinessID, "name": v.Name, "type": v.Type, "salesPrice": v.SalesPrice, "costPrice": v.CostPrice, "notes": v.Notes, "variants": v.Variants, "taxRate": v.TaxRate, "version": v.Version, "createdAt": v.CreatedAt, "active": true}
+	return map[string]any{"id": v.ID, "businessId": v.BusinessID, "name": v.Name, "type": v.Type, "salesPrice": v.SalesPrice, "costPrice": v.CostPrice, "notes": v.Notes, "variants": v.Variants, "taxRate": v.TaxRate, "version": v.Version, "createdAt": v.CreatedAt, "active": !v.Archived, "archived": v.Archived}
 }
 func planWire(v Plan) map[string]any {
-	return map[string]any{"id": v.ID, "businessId": v.BusinessID, "name": v.Name, "interval": v.Interval, "cadence": strings.Title(v.Interval), "salesPrice": money2(v.SalesPrice), "minimumQuantity": v.MinimumQuantity, "availableFrom": v.AvailableFrom, "availableUntil": v.AvailableUntil, "taxRate": rate2(v.TaxRate), "autoClose": v.AutoClose, "allowEarlyClose": v.AllowEarlyClose, "allowPause": v.AllowPause, "allowRenew": v.AllowRenew, "pauseAllowed": v.AllowPause, "closeAllowed": v.AllowEarlyClose, "renewAllowed": v.AllowRenew, "version": v.Version, "createdAt": v.CreatedAt, "active": true}
+	return map[string]any{"id": v.ID, "businessId": v.BusinessID, "name": v.Name, "interval": v.Interval, "cadence": strings.Title(v.Interval), "salesPrice": money2(v.SalesPrice), "minimumQuantity": v.MinimumQuantity, "availableFrom": v.AvailableFrom, "availableUntil": v.AvailableUntil, "taxRate": rate2(v.TaxRate), "autoClose": v.AutoClose, "allowEarlyClose": v.AllowEarlyClose, "allowPause": v.AllowPause, "allowRenew": v.AllowRenew, "pauseAllowed": v.AllowPause, "closeAllowed": v.AllowEarlyClose, "renewAllowed": v.AllowRenew, "version": v.Version, "createdAt": v.CreatedAt, "active": !v.Archived, "archived": v.Archived}
 }
 func subscriptionWire(v Subscription, st *State) map[string]any {
 	amount := "0.00"

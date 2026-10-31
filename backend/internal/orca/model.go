@@ -65,6 +65,7 @@ type Product struct {
 	TaxRate    string    `json:"taxRate"`
 	Version    int64     `json:"version"`
 	CreatedAt  time.Time `json:"createdAt"`
+	Archived   bool      `json:"archived,omitempty"`
 }
 
 type Plan struct {
@@ -83,6 +84,7 @@ type Plan struct {
 	AllowRenew      bool      `json:"allowRenew"`
 	Version         int64     `json:"version"`
 	CreatedAt       time.Time `json:"createdAt"`
+	Archived        bool      `json:"archived,omitempty"`
 }
 
 type Discount struct {

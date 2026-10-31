@@ -149,7 +149,7 @@ func loadState(ctx context.Context, q pgQueryer, businessID string) (*State, err
 	}
 	rows.Close()
 
-	query, args = tenantQuery("SELECT id::text,business_id::text,name,product_type,sales_price::text,cost_price::text,notes,variants,tax_rate::text,version,created_at FROM products", businessID)
+	query, args = tenantQuery("SELECT id::text,business_id::text,name,product_type,sales_price::text,cost_price::text,notes,variants,tax_rate::text,version,created_at,archived FROM products", businessID)
 	rows, err = q.Query(ctx, query, args...)
 	if err != nil {
 		return nil, err
@@ -157,7 +157,7 @@ func loadState(ctx context.Context, q pgQueryer, businessID string) (*State, err
 	for rows.Next() {
 		var v Product
 		var raw []byte
-		if err := rows.Scan(&v.ID, &v.BusinessID, &v.Name, &v.Type, &v.SalesPrice, &v.CostPrice, &v.Notes, &raw, &v.TaxRate, &v.Version, &v.CreatedAt); err != nil {
+		if err := rows.Scan(&v.ID, &v.BusinessID, &v.Name, &v.Type, &v.SalesPrice, &v.CostPrice, &v.Notes, &raw, &v.TaxRate, &v.Version, &v.CreatedAt, &v.Archived); err != nil {
 			rows.Close()
 			return nil, err
 		}
@@ -173,14 +173,14 @@ func loadState(ctx context.Context, q pgQueryer, businessID string) (*State, err
 	}
 	rows.Close()
 
-	query, args = tenantQuery("SELECT id::text,business_id::text,name,interval,sales_price::text,minimum_quantity,COALESCE(available_from::text,''),COALESCE(available_until::text,''),tax_rate::text,auto_close,allow_early_close,allow_pause,allow_renew,version,created_at FROM plans", businessID)
+	query, args = tenantQuery("SELECT id::text,business_id::text,name,interval,sales_price::text,minimum_quantity,COALESCE(available_from::text,''),COALESCE(available_until::text,''),tax_rate::text,auto_close,allow_early_close,allow_pause,allow_renew,version,created_at,archived FROM plans", businessID)
 	rows, err = q.Query(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
 	for rows.Next() {
 		var v Plan
-		if err := rows.Scan(&v.ID, &v.BusinessID, &v.Name, &v.Interval, &v.SalesPrice, &v.MinimumQuantity, &v.AvailableFrom, &v.AvailableUntil, &v.TaxRate, &v.AutoClose, &v.AllowEarlyClose, &v.AllowPause, &v.AllowRenew, &v.Version, &v.CreatedAt); err != nil {
+		if err := rows.Scan(&v.ID, &v.BusinessID, &v.Name, &v.Interval, &v.SalesPrice, &v.MinimumQuantity, &v.AvailableFrom, &v.AvailableUntil, &v.TaxRate, &v.AutoClose, &v.AllowEarlyClose, &v.AllowPause, &v.AllowRenew, &v.Version, &v.CreatedAt, &v.Archived); err != nil {
 			rows.Close()
 			return nil, err
 		}

@@ -67,3 +67,46 @@ func TestBillingCatchupDoesNotActivateFutureSubscription(t *testing.T) {
 		t.Fatal("future subscription was activated or billed before its start date")
 	}
 }
+
+func TestBillingCatchupFinishesPeriodsThroughExpiryBeforeAutoClose(t *testing.T) {
+	api, admin := newAgentToolTestAPI()
+	api.Store.state.Businesses[admin.BusinessID] = Business{ID: admin.BusinessID, Name: "A", Currency: CurrencyINR, Timezone: "UTC", NextInvoiceNumber: 1}
+	api.Store.state.Plans["plan-auto-close"] = Plan{ID: "plan-auto-close", BusinessID: admin.BusinessID, Name: "Auto close", Interval: "monthly", SalesPrice: "100.00", MinimumQuantity: 1, TaxRate: "0", AutoClose: true, Version: 1}
+	api.Store.state.Plans["plan-open"] = Plan{ID: "plan-open", BusinessID: admin.BusinessID, Name: "Manual close", Interval: "monthly", SalesPrice: "200.00", MinimumQuantity: 1, TaxRate: "0", Version: 1}
+	for _, item := range []struct{ id, planID string }{{"sub-auto-close", "plan-auto-close"}, {"sub-manual-close", "plan-open"}} {
+		api.Store.state.Subscriptions[item.id] = Subscription{
+			ID: item.id, BusinessID: admin.BusinessID, CustomerID: "customer-a", PlanID: item.planID,
+			Status: "Active", StartDate: "2026-10-01", ExpiryDate: "2026-10-15", Version: 1,
+			Lines: []SubscriptionLine{{Name: item.planID, Quantity: 1, UnitPrice: "100.00", TaxRate: "0"}},
+		}
+	}
+
+	cutoff := time.Date(2026, 11, 1, 12, 0, 0, 0, time.UTC)
+	created, err := runBillingForBusiness(context.Background(), api.Store, admin.BusinessID, Actor{BusinessID: admin.BusinessID, Role: "system"}, cutoff)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if created != 2 || len(api.Store.state.Invoices) != 2 {
+		t.Fatalf("expired-term catch-up created=%d invoices=%d, want two eligible October periods", created, len(api.Store.state.Invoices))
+	}
+	if got := api.Store.state.Subscriptions["sub-auto-close"].Status; got != "Closed" {
+		t.Fatalf("auto-close plan subscription status = %q, want Closed", got)
+	}
+	if got := api.Store.state.Subscriptions["sub-manual-close"].Status; got != "Active" {
+		t.Fatalf("manual-close plan subscription status = %q, want Active", got)
+	}
+	for _, invoice := range api.Store.state.Invoices {
+		if invoice.PeriodStart.Format("2006-01-02") != "2026-10-01" {
+			t.Fatalf("catch-up generated a period beyond expiry: %s", invoice.PeriodStart.Format("2006-01-02"))
+		}
+	}
+	autoCloseEvents := 0
+	for _, event := range api.Store.state.Audit {
+		if event.Action == "subscription.auto_closed" && event.ResourceID == "sub-auto-close" {
+			autoCloseEvents++
+		}
+	}
+	if autoCloseEvents != 1 {
+		t.Fatalf("auto-close audit events = %d, want one", autoCloseEvents)
+	}
+}

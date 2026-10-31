@@ -54,15 +54,14 @@ func (a *API) createSubscription(w http.ResponseWriter, r *http.Request, auth Au
 			if quote.Status != "Accepted" {
 				return fmt.Errorf("%w: quotation must be accepted before conversion", ErrConflict)
 			}
-			if req.CustomerID == "" {
-				req.CustomerID = quote.CustomerID
+			if req.CustomerID != "" && req.CustomerID != quote.CustomerID || req.PlanID != "" && req.PlanID != quote.PlanID {
+				return fmt.Errorf("%w: accepted quotation terms cannot be overridden", ErrValidation)
 			}
-			if req.PlanID == "" {
-				req.PlanID = quote.PlanID
-			}
-			if len(req.Lines) == 0 {
-				req.Lines = append([]SubscriptionLine(nil), quote.Lines...)
-			}
+			req.CustomerID = quote.CustomerID
+			req.PlanID = quote.PlanID
+			// Conversion must use the server-stored, accepted offer, regardless
+			// of any line values supplied in the request.
+			req.Lines = append([]SubscriptionLine(nil), quote.Lines...)
 		}
 		customer, ok := st.Customers[req.CustomerID]
 		if !ok {
@@ -95,6 +94,19 @@ func (a *API) createSubscription(w http.ResponseWriter, r *http.Request, auth Au
 		lines := req.Lines
 		if len(lines) == 0 {
 			lines = []SubscriptionLine{{Name: plan.Name, Quantity: plan.MinimumQuantity, UnitPrice: plan.SalesPrice, TaxRate: plan.TaxRate}}
+		}
+		if req.QuotationID == "" {
+			planQuantity := plan.MinimumQuantity
+			for _, line := range lines {
+				if line.ProductID == "" {
+					planQuantity = line.Quantity
+					break
+				}
+			}
+			lines, err = canonicalCommercialLines(st, plan, lines, planQuantity)
+			if err != nil {
+				return err
+			}
 		}
 		for i := range lines {
 			if lines[i].Quantity < 1 {
@@ -314,16 +326,7 @@ func runBillingForBusiness(ctx context.Context, store *Store, businessID string,
 			if !ok {
 				continue
 			}
-			if v.ExpiryDate != "" {
-				if expires, e := ParseLocalDate(v.ExpiryDate, business.Timezone); e == nil && cutoff.After(expires) {
-					if plan.AutoClose {
-						v.Status = "Closed"
-						v.Version++
-						st.Subscriptions[id] = v
-					}
-					continue
-				}
-			}
+			expired := v.ExpiryDate != "" && cutoff.In(loc).Format("2006-01-02") > v.ExpiryDate
 			cursor := v.BillingCursor
 			if cursor == nil {
 				start, e := ParseLocalDate(v.StartDate, business.Timezone)
@@ -339,6 +342,11 @@ func runBillingForBusiness(ctx context.Context, store *Store, businessID string,
 			anchor := AnchorFor(anchorTime, plan.Interval, loc)
 			for iterations := 0; iterations < 1200 && !cursor.After(cutoff); iterations++ {
 				start := cursor.In(loc)
+				// A term's expiry date is inclusive. Catch up any due period that
+				// started on or before it, then stop before the first later period.
+				if v.ExpiryDate != "" && start.Format("2006-01-02") > v.ExpiryDate {
+					break
+				}
 				end, e := NextPeriod(start, plan.Interval, anchor, loc)
 				if e != nil {
 					return e
@@ -403,6 +411,12 @@ func runBillingForBusiness(ctx context.Context, store *Store, businessID string,
 				if cursor.After(cutoff) {
 					break
 				}
+			}
+			if expired && plan.AutoClose && v.Status == "Active" {
+				v.Status = "Closed"
+				v.Version++
+				st.Subscriptions[id] = v
+				st.Audit = append(st.Audit, auditEvent(actor, "subscription.auto_closed", "subscription", id, map[string]any{"planId": plan.ID, "expiryDate": v.ExpiryDate}))
 			}
 		}
 		st.Businesses[business.ID] = business
@@ -698,8 +712,30 @@ func (a *API) reportSummary(w http.ResponseWriter, r *http.Request, auth Authent
 		writeErr(w, ErrForbidden)
 		return
 	}
+	from, err := parseReportDate(r.URL.Query().Get("from"), "from")
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	to, err := parseReportDate(r.URL.Query().Get("to"), "to")
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	if from != "" && to != "" && from > to {
+		writeErr(w, fmt.Errorf("%w: from must not be after to", ErrValidation))
+		return
+	}
 	var result map[string]any
-	err := a.Store.ReadFor(r.Context(), auth.Actor.BusinessID, func(st *State) error {
+	err = a.Store.ReadFor(r.Context(), auth.Actor.BusinessID, func(st *State) error {
+		location := time.UTC
+		if timezone := st.Businesses[auth.Actor.BusinessID].Timezone; timezone != "" {
+			var err error
+			location, err = time.LoadLocation(timezone)
+			if err != nil {
+				return fmt.Errorf("%w: business timezone is invalid", ErrValidation)
+			}
+		}
 		active := 0
 		recurring := decimal.Zero
 		invoiced := decimal.Zero
@@ -727,6 +763,10 @@ func (a *API) reportSummary(w http.ResponseWriter, r *http.Request, auth Authent
 			if v.Status != "Confirmed" && v.Status != "Paid" {
 				continue
 			}
+			// Invoice report periods are based on issue date in the business timezone.
+			if !reportDateMatches(v.CreatedAt, from, to, location) {
+				continue
+			}
 			total, _ := ParseDecimal(v.Total)
 			out, _ := ParseDecimal(v.Outstanding)
 			invoiced = invoiced.Add(total)
@@ -736,12 +776,17 @@ func (a *API) reportSummary(w http.ResponseWriter, r *http.Request, auth Authent
 			}
 		}
 		for _, v := range st.Payments {
+			// Collections are grouped by the date funds were received, independently
+			// from the issue date of the invoice they were allocated to.
+			if !reportDateMatches(v.ReceivedAt, from, to, location) {
+				continue
+			}
 			d, e := ParseDecimal(v.Amount)
 			if e == nil {
 				collected = collected.Add(d)
 			}
 		}
-		result = map[string]any{"asOf": now, "currency": CurrencyINR, "activeSubscriptions": active, "recurringRevenue": amountString(recurring), "invoiced": amountString(invoiced), "receivables": amountString(receivable), "overdueInvoices": overdue, "collected": amountString(collected), "integrity": map[string]any{"journalBalanced": journalBalanced(st.Journal), "invoiceHashMismatches": invoiceHashMismatches(st.Invoices), "outboxPending": pendingOutbox(st.Outbox)}}
+		result = map[string]any{"asOf": now, "currency": CurrencyINR, "filters": map[string]string{"from": from, "to": to}, "activeSubscriptions": active, "recurringRevenue": amountString(recurring), "invoiced": amountString(invoiced), "receivables": amountString(receivable), "overdueInvoices": overdue, "collected": amountString(collected), "integrity": map[string]any{"journalBalanced": journalBalanced(st.Journal), "invoiceHashMismatches": invoiceHashMismatches(st.Invoices), "outboxPending": pendingOutbox(st.Outbox)}}
 		return nil
 	})
 	if err != nil {
@@ -750,6 +795,23 @@ func (a *API) reportSummary(w http.ResponseWriter, r *http.Request, auth Authent
 	}
 	writeJSON(w, 200, result)
 }
+
+func parseReportDate(value, name string) (string, error) {
+	if value == "" {
+		return "", nil
+	}
+	date, err := time.Parse("2006-01-02", value)
+	if err != nil || date.Format("2006-01-02") != value {
+		return "", fmt.Errorf("%w: %s must use YYYY-MM-DD", ErrValidation, name)
+	}
+	return value, nil
+}
+
+func reportDateMatches(value time.Time, from, to string, location *time.Location) bool {
+	date := value.In(location).Format("2006-01-02")
+	return (from == "" || date >= from) && (to == "" || date <= to)
+}
+
 func journalBalanced(list []JournalEntry) bool {
 	d, c := decimal.Zero, decimal.Zero
 	for _, v := range list {

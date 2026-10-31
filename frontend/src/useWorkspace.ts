@@ -24,10 +24,12 @@ function productFromApi(value: unknown) {
   return {
     id: String(p.id ?? crypto.randomUUID()), name: String(p.name ?? 'Product'), type: String(p.type ?? 'Software'),
     price: asMoney(p.salesPrice ?? p.price), cost: asMoney(p.costPrice ?? p.cost), taxRateBps: typeof p.taxRateBps === 'number' ? p.taxRateBps : rateBasisPoints(p.taxRate), notes: String(p.notes ?? ''),
+    version: Math.max(1, Number(p.version ?? 1)),
     variants: Array.isArray(p.variants) ? p.variants.map((item) => {
       const variant = asRecord(item);
-      const variantName = [variant.name, variant.value].filter(Boolean).map(String).join(' · ');
-      return { name: variantName || 'Variant', adjustment: asMoney(variant.adjustment ?? variant.priceAdjustment) };
+      const name = String(variant.name ?? ''); const value = String(variant.value ?? '');
+      const variantName = name && value && name !== value ? `${name} · ${value}` : name || value;
+      return { name: variantName || 'Variant', attributeName: name, value: value || name, adjustment: asMoney(variant.adjustment ?? variant.priceAdjustment) };
     }) : [], active: p.active !== false,
   };
 }
@@ -48,13 +50,13 @@ function planFromApi(value: unknown) {
   const rawCadence = String(p.cadence ?? p.interval ?? p.frequency ?? 'Monthly');
   const cadence = rawCadence.charAt(0).toUpperCase() + rawCadence.slice(1).toLowerCase();
   return {
-    id: String(p.id ?? crypto.randomUUID()), name: String(p.name ?? 'Plan'), price: asMoney(p.salesPrice ?? p.price ?? p.amount),
+    id: String(p.id ?? crypto.randomUUID()), name: String(p.name ?? 'Plan'), price: asMoney(p.salesPrice ?? p.price ?? p.amount), version: Math.max(1, Number(p.version ?? 1)),
     cadence: (['Daily', 'Weekly', 'Monthly', 'Yearly'].includes(cadence) ? cadence : 'Monthly') as 'Daily' | 'Weekly' | 'Monthly' | 'Yearly',
     taxRateBps: typeof p.taxRateBps === 'number' ? p.taxRateBps : rateBasisPoints(p.taxRate),
     minimumQuantity: Number(p.minimumQuantity ?? p.minQuantity ?? 1), availableFrom: String(p.availableFrom ?? ''), availableUntil: String(p.availableUntil ?? ''),
     pauseAllowed: p.pauseAllowed !== false && p.allowPause !== false,
     closeAllowed: p.closeAllowed !== false && p.allowEarlyClose !== false,
-    renewAllowed: p.renewAllowed !== false && p.allowRenew !== false, active: p.active !== false,
+    renewAllowed: p.renewAllowed !== false && p.allowRenew !== false, autoClose: p.autoClose === true, active: p.active !== false,
   };
 }
 
@@ -181,6 +183,7 @@ function quoteTemplateFromApi(value: unknown) {
         quantity: Math.max(1, Number(line.quantity ?? 1)),
         unitPrice: asExactDecimal(line.unitPrice ?? '0'),
         taxRate: String(line.taxRate ?? '0'),
+        ...(line.variant ? { variant: String(line.variant) } : {}),
       };
     }),
   };
@@ -270,8 +273,11 @@ export function useWorkspace() {
         setConnectionError('ORCA could not reach its API. Check that the backend and database are running, then retry.');
         return;
       }
+      let businessTimezone = 'UTC';
       try {
-        await apiRequest('/me');
+        const session = asRecord(await apiRequest<unknown>('/me'));
+        const business = asRecord(session.business);
+        if (typeof business.timezone === 'string' && business.timezone.trim()) businessTimezone = business.timezone;
       } catch (error) {
         if (!mounted) return;
         setData(emptyWorkspaceData());
@@ -310,6 +316,7 @@ export function useWorkspace() {
       const rows = <T>(result: { items: T[] | null; status?: number }): T[] => result.items ?? [];
       try {
         setData({
+          timezone: businessTimezone,
           products: rows(products).map(productFromApi),
           plans: rows(plans).map(planFromApi),
           customers: rows(customers).map(customerFromApi),

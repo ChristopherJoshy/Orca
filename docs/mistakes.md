@@ -1,5 +1,36 @@
 # Verified mistakes and prevention
 
+## 2026-10-31 — Product variant labels were confused with submitted values
+
+- **Observed:** the new quote/subscription form displayed a combined variant label such as `Brand · Odoo` and used that display text as the value sent to the API. The server accepts only a catalog variant name or value, so products with distinct name/value fields would be rejected.
+- **Cause:** presentation text and the catalog identifier shared one frontend property.
+- **Correction:** the frontend now keeps the display label and exact variant value separately; the server resolves the value and applies the additive adjustment. Saved quotation templates also snapshot the selected variant.
+- **Regression evidence:** Go coverage checks server-resolved variant prices in direct quotes/subscriptions and a template-to-quotation flow. Frontend build/type checks are part of final verification.
+- **Prevention:** keep display labels separate from submitted identifiers and test a variant whose `name` differs from its `value`.
+
+## 2026-10-31 — Template IDs did not prevent caller-supplied quote lines
+
+- **Observed:** quotation creation loaded saved template terms only when the request contained no lines. Supplying a template ID together with arbitrary lines skipped that path and could leave caller-supplied prices in the quotation.
+- **Cause:** template selection was treated as a defaulting hint instead of the source of the saved commercial terms.
+- **Correction:** template-backed quotations always copy the template's server-stored lines; quotation totals now use the shared decimal calculation engine and include rounded line taxes.
+- **Regression evidence:** template conversion coverage submits a spoofed line and asserts the saved variant price and tax-inclusive amount are retained.
+- **Prevention:** resolve authoritative commercial terms inside the domain transaction and test adversarial requests that combine a trusted record ID with conflicting client input.
+
+## 2026-10-31 — Catalog create payloads could set internal archive state
+
+- **Observed:** after adding persistent `Archived` fields to product and plan models, their create handlers decoded directly into those models. A caller could submit `archived: true` and hide a newly created record from active catalog lists.
+- **Cause:** storage state and public create input shared the same model type.
+- **Correction:** create handlers now force archive state to false; only the admin archive action can change it. Admin-only create, update, and archive paths are covered by focused handler tests.
+- **Prevention:** never expose lifecycle flags solely because they exist on a persistence model; set server-controlled fields in domain handlers and test caller-supplied values.
+
+## 2026-10-31 — Expired subscriptions skipped eligible billing catch-up
+
+- **Observed:** the billing worker checked term expiry before enumerating due periods. A delayed worker could therefore close a subscription and skip an unpaid billing period whose start date was still inside the term.
+- **Cause:** expiration was treated as an all-or-nothing early exit instead of a boundary on period generation.
+- **Correction:** the worker now completes due periods whose local start date is on or before the inclusive expiry date, stops before later periods, and records an audit event when plan policy auto-closes the subscription.
+- **Regression evidence:** a catch-up test covers both auto-close and manual-close plans, the eligible invoice, no later period, and the audit event.
+- **Prevention:** test delayed catch-up at term boundaries and apply expiry per billing period rather than before catch-up.
+
 ## 2026-10-31 — Session updates erased password hashes
 
 - **Observed:** a newly created account could reach its workspace after signup, but a later email/password login returned an authentication error.

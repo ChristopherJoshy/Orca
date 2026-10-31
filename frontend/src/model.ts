@@ -4,12 +4,12 @@ export type InvoiceStatus = 'Draft' | 'Confirmed' | 'Paid' | 'Cancelled';
 export type SubscriptionStatus = 'Draft' | 'Quotation' | 'Confirmed' | 'Active' | 'Paused' | 'Closed';
 
 export type Product = {
-  id: string; name: string; type: string; price: Money; cost: Money; taxRateBps: number; notes: string;
-  variants: { name: string; adjustment: Money }[]; active: boolean;
+  id: string; name: string; type: string; price: Money; cost: Money; taxRateBps: number; notes: string; version?: number;
+  variants: { name: string; value: string; attributeName?: string; adjustment: Money }[]; active: boolean;
 };
 export type Plan = {
-  id: string; name: string; price: Money; cadence: Cadence; taxRateBps: number; minimumQuantity: number;
-  availableFrom: string; availableUntil: string; pauseAllowed: boolean; closeAllowed: boolean;
+  id: string; name: string; price: Money; cadence: Cadence; taxRateBps: number; minimumQuantity: number; version?: number;
+  availableFrom: string; availableUntil: string; pauseAllowed: boolean; closeAllowed: boolean; autoClose?: boolean;
   renewAllowed: boolean; active: boolean;
 };
 export type Customer = {
@@ -43,7 +43,7 @@ export type Invoice = {
 };
 export type Payment = { id: string; invoiceId: string; customerId: string; amount: Money; date: string; method: string; note: string };
 export type Quotation = { id: string; number: string; customerId: string; title: string; date: string; validUntil: string; amount: Money; status: string };
-export type QuoteTemplate = { id: string; name: string; validDays: number; planId: string; lines: { productId: string; name: string; quantity: number; unitPrice: Money; taxRate: string }[] };
+export type QuoteTemplate = { id: string; name: string; validDays: number; planId: string; lines: { productId: string; name: string; quantity: number; unitPrice: Money; taxRate: string; variant?: string }[] };
 export type Discount = { id: string; name: string; kind: 'Percentage' | 'Fixed'; value: string; scope: string; minimum: Money; minimumQuantity: number; usage: number; limit: number; startsAt: string; endsAt: string; active: boolean };
 export type TaxRule = { id: string; name: string; region: string; rateBps: number; active: boolean };
 export type ExportJob = { id: string; name: string; createdAt: string; status: string; counts?: Record<string, number> };
@@ -51,6 +51,7 @@ export type Staff = { id: string; name: string; email: string; role: 'Admin' | '
 export type Approval = { id: string; title: string; detail: string; amount?: Money; target: string; createdAt: string; status: 'Needs review' | 'Approved' | 'Declined'; action: string; executionResult?: Record<string, unknown> };
 
 export type WorkspaceData = {
+  timezone: string;
   products: Product[]; plans: Plan[]; customers: Customer[]; subscriptions: Subscription[];
   invoices: Invoice[]; payments: Payment[]; quotations: Quotation[]; discounts: Discount[];
   quoteTemplates: QuoteTemplate[]; taxes: TaxRule[]; exports: ExportJob[]; staff: Staff[]; approvals: Approval[];
@@ -59,6 +60,7 @@ export type WorkspaceData = {
 export const today = new Date().toISOString().slice(0, 10);
 export function emptyWorkspaceData(): WorkspaceData {
   return {
+    timezone: 'UTC',
     products: [], plans: [], customers: [], subscriptions: [], invoices: [], payments: [],
     quotations: [], quoteTemplates: [], discounts: [], taxes: [], exports: [], staff: [], approvals: [],
   };
