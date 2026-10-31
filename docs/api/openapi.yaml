@@ -488,9 +488,20 @@ paths:
         '202': { description: Export job accepted }
   /agent/runs:
     get:
-      summary: List the current actor's persisted Copilot runs
+      summary: List persisted Copilot runs visible to the actor and provider availability
       responses:
-        '200': { description: Run collection }
+        '200':
+          description: Run collection and a boolean indicating whether Groq is configured
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, available]
+                properties:
+                  items:
+                    type: array
+                    items: { type: object, additionalProperties: true }
+                  available: { type: boolean }
     post:
       summary: Start a bounded Groq Copilot run when the provider is configured
       responses:

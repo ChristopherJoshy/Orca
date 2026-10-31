@@ -248,3 +248,10 @@
 
 - Removed the “Billing workspace” caption and the “Subscriptions · recurring billing” eyebrow, including their separator and dot, from the sign-in story panel. Kept the ORCA mark and main billing statement.
 - **Verification:** not run at the user's request. The previous auth release's responsive and production checks are recorded above.
+
+## 2026-10-31 — Restore Copilot responses and clarify billing evidence
+
+- Fixed the Copilot readiness contract so the persisted-run endpoint reports only whether Groq is configured, without returning secrets. The chat now follows queued/running work through its bounded deadline instead of presenting the initial acceptance status as the answer.
+- Rendered persisted tool calls and results as named, color-coded progress steps; restored them from run transcripts after refresh and connected the stop action to API cancellation. Reworked the chat into a larger conversation panel with a usable composer and available-tool rail.
+- Improved Invoice Truth spacing and type hierarchy for the invoice identity, billed-to details, date/period facts, payment allocations, balance summary, engine version, and long calculation hash.
+- **Verification:** Go tests, race detector and vet; frontend typecheck/lint/production build; OpenAPI YAML parsing; and `git diff --check` passed. Live Groq tool-call and browser verification remain open.

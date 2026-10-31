@@ -26,7 +26,15 @@ const primaryNav: { page: PageKey; icon: IconName }[] = [
 ];
 
 type Route = { page: PageKey; id?: string };
-type ChatMessage = { id: string; role: 'user' | 'assistant'; text: string; time: string };
+type ChatMessage = {
+  id: string;
+  role: 'user' | 'assistant' | 'tool';
+  text: string;
+  time: string;
+  runId?: string;
+  toolName?: string;
+  toolStatus?: 'running' | 'complete' | 'failed';
+};
 type CreateKind = 'customer' | 'product' | 'plan' | 'quotation' | 'quoteTemplate' | 'subscription' | 'discount' | 'staff' | 'tax';
 type CatalogEditTarget = { kind: 'product'; record: Product } | { kind: 'plan'; record: Plan };
 type CatalogArchiveTarget = { kind: 'product'; record: Product } | { kind: 'plan'; record: Plan };
@@ -84,6 +92,117 @@ function checkoutDestination(value: unknown): string {
   try { destination = new URL(response.url); } catch { throw invalidResponse(); }
   if (destination.origin !== 'https://checkout.stripe.com' || destination.username || destination.password) throw invalidResponse();
   return destination.href;
+}
+
+function agentRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' ? value as Record<string, unknown> : {};
+}
+
+function agentToolName(name: string): string {
+  const names: Record<string, string> = {
+    search_records: 'Search workspace records',
+    get_report_summary: 'Read billing and integrity',
+    explain_invoice: 'Inspect invoice evidence',
+    preview_next_invoice: 'Simulate next invoice',
+    request_action_review: 'Prepare action for review',
+  };
+  return names[name] ?? 'Use workspace tool';
+}
+
+function agentToolSummary(name: string, value: unknown): string {
+  const record = agentRecord(value);
+  if (typeof record.error === 'string') return 'This step could not complete. No change was made.';
+  if (typeof record.count === 'number' && typeof record.recordType === 'string') {
+    const noun = record.recordType.replace(/s$/, '');
+    return `${record.count} matching ${noun}${record.count === 1 ? '' : 's'} found.`;
+  }
+  if (typeof record.hashMatches === 'boolean' && typeof record.total === 'string') {
+    return `Invoice ${String(record.number ?? '')} · ${String(record.currency ?? 'INR')} ${record.total} · calculation hash ${record.hashMatches ? 'matches' : 'does not match'}.`;
+  }
+  if (record.writesPerformed === false && typeof record.total === 'string') {
+    return `Preview total ${String(record.currency ?? 'INR')} ${record.total}. No records were changed.`;
+  }
+  if (record.integrity && typeof record.integrity === 'object') return 'Billing summary and integrity checks loaded from workspace records.';
+  if (typeof record.approvalId === 'string' || typeof record.action === 'string') return 'A proposal is ready for ORCA review. No action was executed.';
+  return `${agentToolName(name)} completed. Copilot is reviewing the result.`;
+}
+
+function agentToolRequest(name: string, args: unknown): string {
+  const input = agentRecord(args);
+  if (name === 'search_records') {
+    const kind = String(input.recordType ?? 'workspace records').replace(/s$/, '');
+    const query = String(input.query ?? '').trim();
+    return `Searching ${kind}${query ? ` for “${query}”` : ''}.`;
+  }
+  if (name === 'explain_invoice') return `Loading the stored calculation for ${String(input.invoiceId ?? 'this invoice')}.`;
+  if (name === 'preview_next_invoice') return `Simulating the next bill for ${String(input.subscriptionId ?? 'this subscription')}.`;
+  if (name === 'request_action_review') return `Preparing ${String(input.action ?? 'the requested action').replaceAll('_', ' ')} for human review.`;
+  if (name === 'get_report_summary') return 'Reading billing totals and integrity checks.';
+  return 'Running a workspace tool.';
+}
+
+function agentRunMessages(run: Record<string, unknown>): ChatMessage[] {
+  const runId = String(run.id ?? '');
+  if (!runId) return [];
+  const stamp = run.createdAt ? new Date(String(run.createdAt)).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' }) : '';
+  const transcript = Array.isArray(run.transcript) ? run.transcript : [];
+  const messages: ChatMessage[] = [];
+  const toolPositions = new Map<string, number>();
+  for (const raw of transcript) {
+    const entry = agentRecord(raw);
+    if (entry.role === 'user' && typeof entry.content === 'string') {
+      messages.push({ id: `${runId}:user:${messages.length}`, runId, role: 'user', text: entry.content, time: stamp });
+      continue;
+    }
+    if (entry.role === 'assistant' && Array.isArray(entry.tool_calls)) {
+      for (const rawCall of entry.tool_calls) {
+        const call = agentRecord(rawCall);
+        const fn = agentRecord(call.function);
+        const name = String(fn.name ?? call.name ?? '');
+        const callId = String(call.id ?? `${messages.length}`);
+        toolPositions.set(callId, messages.length);
+        messages.push({ id: `${runId}:tool:${callId}`, runId, role: 'tool', toolName: name, toolStatus: 'running', text: agentToolRequest(name, fn.arguments ? (() => { try { return JSON.parse(String(fn.arguments)); } catch { return {}; } })() : {}), time: stamp });
+      }
+      if (typeof entry.content === 'string' && entry.content.trim()) messages.push({ id: `${runId}:assistant:${messages.length}`, runId, role: 'assistant', text: entry.content, time: stamp });
+      continue;
+    }
+    if (entry.role === 'tool') {
+      const callId = String(entry.toolCallId ?? '');
+      const position = toolPositions.get(callId);
+      if (position === undefined) continue;
+      let result: unknown = entry.content;
+      if (typeof entry.content === 'string') {
+        try { result = JSON.parse(entry.content); } catch { result = {}; }
+      }
+      const failed = Boolean(agentRecord(result).error);
+      messages[position] = { ...messages[position], toolStatus: failed ? 'failed' : 'complete', text: agentToolSummary(String(entry.name ?? messages[position].toolName ?? ''), result) };
+      continue;
+    }
+    if (entry.role === 'assistant' && typeof entry.content === 'string' && entry.content.trim()) {
+      messages.push({ id: `${runId}:assistant:${messages.length}`, runId, role: 'assistant', text: entry.content, time: stamp });
+    }
+  }
+  const status = String(run.status ?? '').toLowerCase().replace(/[-_]/g, '');
+  const finalMessage = String(run.message ?? '').trim();
+  const placeholder = ['Copilot request accepted.', 'Copilot is reviewing the request.'];
+  const terminal = ['completed', 'failed', 'cancelled', 'needsreview'].includes(status);
+  if (terminal && finalMessage && !placeholder.includes(finalMessage) && !messages.some((message) => message.role === 'assistant' && message.text === finalMessage)) {
+    messages.push({ id: `${runId}:final`, runId, role: 'assistant', text: finalMessage, time: stamp });
+  }
+  return messages;
+}
+
+function isAgentRunTerminal(run: Record<string, unknown>): boolean {
+  return ['completed', 'failed', 'cancelled', 'needsreview', 'needs_review'].includes(String(run.status ?? '').toLowerCase());
+}
+
+function replaceAgentRunMessages(current: ChatMessage[], runId: string, next: ChatMessage[]): ChatMessage[] {
+  const start = current.findIndex((message) => message.runId === runId);
+  if (start < 0) return [...current, ...next];
+  let insertion = 0;
+  for (let index = 0; index < start; index++) if (current[index].runId !== runId) insertion++;
+  const remaining = current.filter((message) => message.runId !== runId);
+  return [...remaining.slice(0, insertion), ...next, ...remaining.slice(insertion)];
 }
 
 function onlinePaymentFailure(error: unknown): string {
@@ -460,6 +579,8 @@ export default function App() {
   const [profile, setProfile] = useState<{ name: string; email: string; role: string; businessName: string }>({ name: '', email: '', role: 'unknown', businessName: '' });
   const [review, setReview] = useState<{ title: string; description: string; target: string; actionLabel: string; onApprove: () => Promise<boolean> } | null>(null);
   const [copilotBusy, setCopilotBusy] = useState(false);
+  const [copilotAvailable, setCopilotAvailable] = useState(false);
+  const [copilotRunId, setCopilotRunId] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const invoiceLoadAttempt = useRef('');
   useEffect(() => {
@@ -519,30 +640,60 @@ export default function App() {
     }).catch(() => undefined);
     return () => { active = false; };
   }, [apiState, dataMode]);
+  const applyAgentRun = useCallback((run: Record<string, unknown>, removeMessageId?: string) => {
+    const runId = String(run.id ?? '');
+    if (!runId) return;
+    const parsed = agentRunMessages(run);
+    setMessages((current) => {
+      const withoutLocal = removeMessageId ? current.filter((message) => message.id !== removeMessageId) : current;
+      return replaceAgentRunMessages(withoutLocal, runId, parsed);
+    });
+  }, []);
+  const pollAgentRun = useCallback(async (runId: string, removeMessageId?: string) => {
+    setCopilotRunId(runId);
+    setCopilotBusy(true);
+    const deadline = Date.now() + 112_000;
+    let delay = 650;
+    let removeId = removeMessageId;
+    try {
+      while (Date.now() < deadline) {
+        await new Promise((resolve) => window.setTimeout(resolve, delay));
+        const run = await apiRequest<Record<string, unknown>>(`/agent/runs/${encodeURIComponent(runId)}`);
+        applyAgentRun(run, removeId);
+        removeId = undefined;
+        if (isAgentRunTerminal(run)) return run;
+        delay = Math.min(1500, delay + 100);
+      }
+      setMessages((current) => current.some((message) => message.id === `${runId}:still-running`) ? current : [...current, { id: `${runId}:still-running`, runId, role: 'assistant', text: 'This request is taking longer than expected and is still running. Refresh Copilot in a moment to see its result.', time: new Date().toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' }) }]);
+      return undefined;
+    } finally {
+      setCopilotBusy(false);
+      setCopilotRunId('');
+    }
+  }, [applyAgentRun]);
   useEffect(() => {
     if (apiState !== 'online' || dataMode !== 'workspace') return;
     let active = true;
     void apiRequest<Record<string, unknown>>('/agent/runs').then((result) => {
-      if (!active || !Array.isArray(result.items)) return;
-      const restored: ChatMessage[] = [];
+      if (!active) return;
+      setCopilotAvailable(result.available === true);
+      if (!Array.isArray(result.items)) return;
       const runs = [...result.items].filter((entry) => entry && typeof entry === 'object').map((entry) => entry as Record<string, unknown>).sort((left, right) => String(left.createdAt ?? '').localeCompare(String(right.createdAt ?? '')));
-      for (const run of runs) {
-        const stamp = run.createdAt ? new Date(String(run.createdAt)).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' }) : '';
-        const transcript = Array.isArray(run.transcript) ? run.transcript : [];
-        for (const entry of transcript) {
-          if (!entry || typeof entry !== 'object') continue;
-          const item = entry as Record<string, unknown>;
-          const role = item.role === 'assistant' ? 'assistant' : item.role === 'user' ? 'user' : undefined;
-          const content = typeof item.content === 'string' ? item.content : '';
-          if (role && content) restored.push({ id: crypto.randomUUID(), role, text: content, time: stamp });
-        }
-        const response = String(run.message ?? '');
-        if (response) restored.push({ id: crypto.randomUUID(), role: 'assistant', text: response, time: stamp });
+      setMessages(runs.flatMap(agentRunMessages));
+      const activeRun = [...runs].reverse().find((run) => ['queued', 'running'].includes(String(run.status ?? '').toLowerCase()));
+      if (activeRun && active && !isAgentRunTerminal(activeRun)) {
+        void pollAgentRun(String(activeRun.id), undefined).catch(() => {
+          if (!active) return;
+          setMessages((current) => current.some((message) => message.id === `${String(activeRun.id)}:reconnect-error`) ? current : [...current, {
+            id: `${String(activeRun.id)}:reconnect-error`, runId: String(activeRun.id), role: 'assistant',
+            text: 'ORCA could not reconnect to this run. Refresh to load its latest saved progress.',
+            time: new Date().toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' }),
+          }]);
+        });
       }
-      setMessages(restored);
     }).catch(() => undefined);
     return () => { active = false; };
-  }, [apiState, dataMode]);
+  }, [apiState, dataMode, pollAgentRun]);
   useEffect(() => {
     const pop = () => { setRoute(routeFromLocation()); setSearch(''); };
     window.addEventListener('popstate', pop); return () => window.removeEventListener('popstate', pop);
@@ -703,7 +854,8 @@ export default function App() {
   };
   const sendCopilot = async (prompt: string) => {
     const stamp = new Date().toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' });
-    setMessages((items) => [...items, { id: crypto.randomUUID(), role: 'user', text: prompt, time: stamp }]);
+    const localMessageId = crypto.randomUUID();
+    setMessages((items) => [...items, { id: localMessageId, role: 'user', text: prompt, time: stamp }]);
     if (apiState !== 'online' || dataMode !== 'workspace') {
       notify(apiState === 'offline' ? 'Copilot is unavailable offline. No request was sent.' : 'Sign in to a workspace to run Copilot. No request was sent.');
       return;
@@ -711,20 +863,26 @@ export default function App() {
     setCopilotBusy(true);
     try {
       const result = await apiRequest<Record<string, unknown>>('/agent/runs', { method: 'POST', body: JSON.stringify({ message: prompt }) });
-      const runId = String(result.id ?? (result.run as Record<string, unknown> | undefined)?.id ?? '');
-      let outcome = result;
-      if (runId) {
-        for (let attempt = 0; attempt < 10; attempt++) {
-          await new Promise((resolve) => window.setTimeout(resolve, 900));
-          outcome = await apiRequest<Record<string, unknown>>(`/agent/runs/${encodeURIComponent(runId)}`);
-          if (['completed', 'failed', 'cancelled', 'needs_review'].includes(String(outcome.status).toLowerCase())) break;
-        }
-      }
-      const responseText = String(outcome.message ?? outcome.summary ?? outcome.response ?? (runId ? `Run ${runId} is ${String(outcome.status ?? 'in progress')}.` : 'The workspace accepted this Copilot run.'));
-      setMessages((items) => [...items, { id: crypto.randomUUID(), role: 'assistant', text: responseText, time: new Date().toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' }) }]);
+      const runId = String(result.id ?? '');
+      if (!runId) throw new Error('The API did not return a Copilot run ID. No business action was taken.');
+      setCopilotRunId(runId);
+      applyAgentRun(result, localMessageId);
+      if (!isAgentRunTerminal(result)) await pollAgentRun(runId);
     } catch (error) {
+      setMessages((items) => [...items.filter((message) => message.id !== localMessageId), { id: crypto.randomUUID(), role: 'assistant', text: error instanceof Error ? error.message : 'Copilot could not start this request. No business action was taken.', time: new Date().toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' }) }]);
       notify(error instanceof Error ? `Copilot run failed: ${error.message}` : 'Copilot run failed. No action was completed.');
-    } finally { setCopilotBusy(false); }
+    } finally { setCopilotBusy(false); setCopilotRunId(''); }
+  };
+
+  const cancelCopilot = async () => {
+    if (!copilotRunId) return;
+    try {
+      const run = await apiRequest<Record<string, unknown>>(`/agent/runs/${encodeURIComponent(copilotRunId)}/cancel`, { method: 'POST' });
+      applyAgentRun(run);
+      notify('Copilot stopped. No business action was taken.');
+    } catch (error) {
+      notify(error instanceof Error ? `Copilot could not stop: ${error.message}` : 'Copilot could not stop this run.');
+    }
   };
 
   const saveRecord = async (kind: NonNullable<typeof recordDialog>, values: Record<string, string | boolean>): Promise<boolean> => {
@@ -966,9 +1124,9 @@ export default function App() {
       case 'taxes': return <TaxesPage data={data} actions={actions} />;
       case 'staff': return <StaffPage data={data} actions={actions} />;
       case 'exports': return <ExportsPage data={data} actions={actions} />;
-      case 'copilot': return <CopilotPage data={data} messages={messages} onSend={sendCopilot} actions={actions} busy={copilotBusy} canRun={apiState === 'online' && dataMode === 'workspace'} canReview={apiState === 'online' && dataMode === 'workspace' && ['admin', 'staff'].includes(profile.role)} />;
+      case 'copilot': return <CopilotPage data={data} messages={messages} onSend={sendCopilot} onCancel={cancelCopilot} actions={actions} busy={copilotBusy} canRun={apiState === 'online' && dataMode === 'workspace' && copilotAvailable} canReview={apiState === 'online' && dataMode === 'workspace' && ['admin', 'staff'].includes(profile.role)} />;
       case 'portal': return <PortalPage data={data} actions={actions} isCustomer={isCustomer} canPayOnline={canPayOnline} />;
-      default: return <SettingsPage actions={actions} />;
+      default: return <SettingsPage actions={actions} groqAvailable={apiState === 'online' && dataMode === 'workspace' && copilotAvailable} />;
     }
   })();
 
@@ -1002,7 +1160,7 @@ export default function App() {
     {mobileNavOpen && <button type="button" className="nav-scrim" aria-label="Close navigation" onClick={() => setMobileNavOpen(false)} />}
     <div className="main-shell">
       <header className="topbar"><div className="topbar-left"><button ref={mobileMenuButtonRef} type="button" className="icon-button mobile-menu-button" aria-label="Open navigation" aria-expanded={mobileNavOpen} aria-controls="orca-sidebar" onClick={() => setMobileNavOpen(true)}><Icon name="menu" size={18} /></button><div className="breadcrumb"><span>{profile.businessName}</span><Icon name="chevron" size={14} /><strong>{pageTitles[route.page]}</strong></div></div><div className="topbar-actions"><label className="global-search"><Icon name="search" size={16} /><span className="sr-only">Search the current page</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search anything…" /><kbd>⌘ K</kbd></label><Badge tone={apiTone}>{apiLabel}</Badge><div className="topbar-divider" /><IconButton icon="bell" label="Open Copilot approvals" onClick={() => navigate('copilot')} /><div className="top-avatar"><Avatar initials={userInitials} size="sm" /></div><div className="new-menu-wrap"><Button variant="primary" size="sm" icon="plus" onClick={() => setNewMenuOpen(!newMenuOpen)}>New</Button>{newMenuOpen && <div className="new-menu">{newRecordKinds.map((kind) => <button type="button" key={kind} onClick={() => { setNewMenuOpen(false); create(kind); }}>{`New ${kind}`}</button>)}</div>}</div></div></header>
-      <main className="page-content"><div className="content-wrap">{page}</div></main>
+      <main className={`page-content ${route.page === 'copilot' ? 'copilot-page-content' : ''}`}><div className="content-wrap">{page}</div></main>
     </div>
     {recordDialog && <CreateRecordDialog kind={recordDialog} data={data} onClose={() => setRecordDialog(null)} onSave={(values) => saveRecord(recordDialog, values)} />}
     {catalogEdit?.kind === 'product' && <ProductEditDialog key={`product-${catalogEdit.record.id}`} product={catalogEdit.record} onClose={() => setCatalogEdit(null)} onSave={(values) => saveProduct(catalogEdit.record, values)} />}

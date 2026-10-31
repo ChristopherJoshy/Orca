@@ -4,7 +4,7 @@ This document defines the product agent. `AGENTS.md` is the separate contributor
 
 ## Current implementation
 
-The React client starts a persisted run through the Go API. When `GROQ_API_KEY` is configured, the API calls Groq's OpenAI-compatible chat-completions endpoint and executes a bounded tool loop. The default model is `openai/gpt-oss-120b`; `GROQ_MODEL` can override it. Without a key, the run is recorded as unavailable and no action is claimed.
+The React client starts a persisted run through the Go API. When `GROQ_API_KEY` is configured, the API calls Groq's OpenAI-compatible chat-completions endpoint and executes a bounded tool loop. The default model is `openai/gpt-oss-120b`; `GROQ_MODEL` can override it. Without a key, the run is recorded as unavailable and no action is claimed. The run-list response includes an `available` boolean; it never returns the provider credential.
 
 The current tool set is deliberately smaller than the product target:
 
@@ -41,7 +41,7 @@ Every new website action needs an entry here with its tool, authorization rule, 
 
 ## Run model and limits
 
-Runs and transcripts persist in the store. The process executes at most six model steps, three tool calls in one response, and eight tool calls total. Provider calls have a 50-second client timeout and the whole run has a 110-second deadline. Requests, responses, arguments, results, and transcripts have size limits. Cancellation marks the persisted run and cancels the in-flight provider context; the loop checks cancellation before additional tool calls.
+Runs and transcripts persist in the store. The process executes at most six model steps, three tool calls in one response, and eight tool calls total. Provider calls have a 50-second client timeout and the whole run has a 110-second deadline. Requests, responses, arguments, results, and transcripts have size limits. Cancellation marks the persisted run and cancels the in-flight provider context; the loop checks cancellation before additional tool calls. The web client follows a run until its stored terminal status (up to 112 seconds), renders each recorded tool call and result as a color-coded progress step, and reloads those steps from the persisted transcript after refresh. It does not present queued/running status text as the assistant's answer.
 
 Execution currently runs in a process goroutine, not a durable worker. Refreshing the UI reloads saved progress and does not replay a completed payment or other financial operation. A process restart can lose an in-flight run; automatic safe resumption is not implemented. Partial provider/tool failures are recorded as failures and do not claim that an action succeeded.
 

@@ -152,3 +152,19 @@
 - **Cause:** the Vercel project had no effective production `ORCA_PUBLIC_URL`, so discovery generation fell back to the local development origin and correctly rejected it under `VERCEL_ENV=production`.
 - **Correction:** configured the explicit production origin `https://orca-orcin.vercel.app` on the Vercel project and verified both the local production build and hosted OAuth discovery endpoint.
 - **Prevention:** set and verify the production origin as part of Vercel project setup; keep the production guard so OAuth metadata cannot silently publish localhost URLs.
+
+## 2026-10-31 — Copilot showed run acceptance as its answer
+
+- **Observed:** the chat displayed “Copilot request accepted.” without waiting for the provider's final response or showing its tool activity.
+- **Cause:** the frontend stopped polling after a fixed nine-second window and treated the persisted run's nonterminal status message as user-facing output. Provider readiness was also added to the approvals response while the UI reads it from the run-list response.
+- **Correction:** the frontend now checks terminal run states, follows the persisted run for its bounded execution window, and renders/restores tool calls and results from the transcript. The correct run-list API reports provider availability without exposing the key.
+- **Regression evidence:** a Go handler test covers configured and blank provider readiness, confirms the run-list response shape, and checks the credential is not returned; frontend typecheck, lint, and production build pass.
+- **Prevention:** keep workflow status separate from assistant content, keep client readiness signals on the endpoint that owns that workflow, and verify that in-progress tasks remain visible until completion or cancellation.
+
+## 2026-10-31 — Invoice evidence labels and values ran together
+
+- **Observed:** the hosted invoice screenshot showed the business and invoice number, customer details, summary labels, and calculation metadata without clear spacing.
+- **Cause:** document identity and metadata used inline text, while long hashes and narrow payment details had no dedicated layout boundaries.
+- **Correction:** use explicit grid/fact rows for identity, customer, dates, payment totals, and calculation metadata; allow hashes and record names to wrap.
+- **Regression evidence:** frontend typecheck, lint, and production build pass. A live responsive browser review has not yet been completed.
+- **Prevention:** inspect financial details at desktop and phone widths and test dense identifiers separately from their labels.

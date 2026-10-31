@@ -27,6 +27,7 @@ Business workspace navigation: Overview, Customers, Catalog, Plans, Quotations, 
 - Create/edit flows validate locally for guidance and again on the server. Errors identify the field and recovery step. Confirm consequential actions with exact target, amount, and effect.
 - Invoices show itemized stored calculations and an explainable tax/discount breakdown. Preserve workflow status separately from balance/overdue indicators.
 - Agent progress names the step and outcome; approval cards bind to exact inputs and link affected records. Provider unavailability leaves ordinary work accessible.
+- Copilot conversations use a readable, full-width chat panel with a persistent composer; tool activity is shown as distinct, color-coded steps with working, completed, and failed states. Invoice Truth separates labels from values and wraps calculation hashes without clipping.
 - Responsive at desktop, tablet, and mobile widths. Use semantic headings, labels, focus order, visible focus, accessible names, and sufficient contrast.
 
 ## Browser evidence

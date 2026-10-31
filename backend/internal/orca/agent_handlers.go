@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -163,7 +164,7 @@ func (a *API) listAgentRuns(w http.ResponseWriter, r *http.Request, auth Authent
 		writeErr(w, err)
 		return
 	}
-	writeJSON(w, 200, map[string]any{"items": items})
+	writeJSON(w, 200, map[string]any{"items": items, "available": strings.TrimSpace(a.Config.GroqAPIKey) != ""})
 }
 func (a *API) startAgentRun(w http.ResponseWriter, r *http.Request, auth Authenticated) {
 	var req struct {
@@ -189,8 +190,8 @@ func (a *API) startAgentRun(w http.ResponseWriter, r *http.Request, auth Authent
 	}
 	now := time.Now().UTC()
 	status := "Queued"
-	message := "Copilot request accepted."
-	if a.Config.GroqAPIKey == "" {
+	message := "Copilot is starting your request."
+	if strings.TrimSpace(a.Config.GroqAPIKey) == "" {
 		status = "Failed"
 		message = "Copilot is not configured for this workspace. No business action was taken."
 	}
@@ -200,7 +201,7 @@ func (a *API) startAgentRun(w http.ResponseWriter, r *http.Request, auth Authent
 		writeErr(w, err)
 		return
 	}
-	if a.Config.GroqAPIKey != "" {
+	if strings.TrimSpace(a.Config.GroqAPIKey) != "" {
 		runContext := a.registerAgentExecution(id)
 		go func() {
 			defer a.finishAgentExecution(id)
