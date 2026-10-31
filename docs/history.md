@@ -1,5 +1,13 @@
 # Change history and verification
 
+## 2026-10-31 — Public product landing page and Vercel project cleanup
+
+- Replaced the signed-out root screen with a public ORCA home page inspired by spacious, typography-led infrastructure sites. The page explains recurring billing, Invoice Truth, Billing Control Tower, and the Copilot using real product behavior, with direct sign-in and workspace creation and no demo CTA, invented customer logos, or unsupported metrics.
+- Kept protected routes and auth links available; added responsive navigation and an original billing-cycle illustration.
+- Removed three unused Vercel projects connected to the same repository (`orca-wich`, `chrisorca`, and `frontend-bwk1`) after identifying their mismatched build settings. Preserved the canonical `orca` project and its `orca-orcin.vercel.app` domain.
+- **Verification:** frontend typecheck/lint and production build passed with the canonical HTTPS origin. `agent-browser` reviewed desktop (1440×1000) and mobile (390×844); sign-up and return-home navigation worked, mobile width matched the viewport, and Axe reported zero violations and zero incomplete checks. The canonical pre-change Vercel deployment, same-origin API health, and OAuth discovery returned HTTP 200. Landing-page deployment is pending the reviewed push.
+- **Known limit:** live signup still requires a configured Resend sender; the production API returns 503 before creating an account when email delivery is unavailable.
+
 ## 2026-10-31 — Honest email limits and production signup guard
 
 - Added an ORCA-styled dialog for invoice and quotation send actions, signup, customer access, password reset, and provider settings when email is unavailable. It explains that this build did not fund automatic email and confirms that nothing was sent or queued and no document/account state changed.

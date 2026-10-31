@@ -1,5 +1,19 @@
 # Verified mistakes and prevention
 
+## 2026-10-31 — Duplicate Vercel projects obscured the canonical build status
+
+- **Observed:** three extra Vercel projects for this repository reported failed deployments while the canonical `orca` project's deployment for the same commit was ready. Two duplicate projects lacked the effective HTTPS public origin required to generate MCP discovery metadata; the third combined a `frontend` root directory with root-relative install settings.
+- **Cause:** multiple projects were connected to the same Git repository without a single canonical project/build configuration, making failed duplicate builds look like a production failure.
+- **Correction:** after the owner requested removing unused ORCA projects, deleted `orca-wich`, `chrisorca`, and `frontend-bwk1`; retained `orca` and its production domain. The canonical deployment, API health, and OAuth discovery returned HTTP 200.
+- **Prevention:** keep one documented production Vercel project, verify its root/build/install settings and `ORCA_PUBLIC_URL`, and inspect the canonical deployment status before diagnosing a failed duplicate as the live release.
+
+## 2026-10-31 — Public landing page had weak contrast and an unnamed figure
+
+- **Observed:** the first browser accessibility scan found three contrast failures and a generic illustration element with an unsupported accessible-name attribute.
+- **Cause:** low-contrast small labels and an `aria-label` on a generic `div` were not checked before the first preview.
+- **Correction:** darkened the workflow labels and represented the billing-cycle graphic as a named `figure`; the follow-up Axe run reported zero violations.
+- **Prevention:** inspect new public UI at desktop and mobile widths and resolve accessibility findings before release.
+
 ## 2026-10-31 — Email actions appeared usable without a delivery provider
 
 - **Observed:** document send controls and agent flows could reach outbox behavior even though this deployment has no Resend provider. Signup and reset also depend on email verification.

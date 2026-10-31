@@ -6,6 +6,7 @@ import type { PageActions, PageKey } from './pages';
 import { CatalogPage, CopilotPage, CustomersPage, DiscountsPage, ExportsPage, InvoiceTruthPage, InvoicesPage, OverviewPage, PaymentsPage, PlansPage, PortalPage, QuotationsPage, ReportsPage, SettingsPage, StaffPage, SubscriptionsPage, TaxesPage } from './pages';
 import { Avatar, Badge, Button, Dialog, Form, FormActions, IconButton, SelectField, TextField, ToggleField } from './ui';
 import { useWorkspace } from './useWorkspace';
+import { LandingPage } from './landing';
 
 const pagePaths: Record<PageKey, string> = {
   overview: '/', customers: '/customers', catalog: '/catalog', plans: '/plans', quotations: '/quotations',
@@ -30,6 +31,22 @@ type CreateKind = 'customer' | 'product' | 'plan' | 'quotation' | 'quoteTemplate
 type CatalogEditTarget = { kind: 'product'; record: Product } | { kind: 'plan'; record: Plan };
 type CatalogArchiveTarget = { kind: 'product'; record: Product } | { kind: 'plan'; record: Plan };
 type EmailNotice = { source: 'invoice' | 'quotation' | 'settings' | 'signup' | 'customer-signup' | 'password-reset'; documentNumber?: string };
+type AuthMode = 'login' | 'signup' | 'customer' | 'forgot' | 'reset';
+type PublicMode = AuthMode | 'home';
+
+function initialPublicMode(): PublicMode {
+  const params = new URLSearchParams(window.location.search);
+  const auth = params.get('auth');
+  if (auth && ['login', 'signup', 'customer', 'forgot', 'reset'].includes(auth)) return auth as AuthMode;
+  if (params.has('reset')) return 'reset';
+  if (params.has('verify')) return 'login';
+  if (window.location.pathname !== '/') return 'login';
+  return 'home';
+}
+
+function authPath(mode: PublicMode) {
+  return mode === 'home' || mode === 'reset' ? '/' : `/?auth=${mode}`;
+}
 
 function routeFromLocation(): Route {
   const path = window.location.pathname.replace(/\/$/, '') || '/';
@@ -167,10 +184,8 @@ function PaymentDialog({ invoice, customer, onClose, onSave }: { invoice: Invoic
   </Dialog>;
 }
 
-type AuthMode = 'login' | 'signup' | 'customer' | 'forgot' | 'reset';
-
-function AuthScreen({ apiState, connectionError, onRetry, onAuthenticated }: { apiState: 'checking' | 'online' | 'offline'; connectionError: string; onRetry: () => void; onAuthenticated: () => void }) {
-  const [mode, setMode] = useState<AuthMode>('login');
+function AuthScreen({ apiState, connectionError, initialMode, onModeChange, onBackToHome, onRetry, onAuthenticated }: { apiState: 'checking' | 'online' | 'offline'; connectionError: string; initialMode: AuthMode; onModeChange: (mode: AuthMode) => void; onBackToHome: () => void; onRetry: () => void; onAuthenticated: () => void }) {
+  const [mode, setModeState] = useState<AuthMode>(initialMode);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [business, setBusiness] = useState('');
@@ -180,6 +195,7 @@ function AuthScreen({ apiState, connectionError, onRetry, onAuthenticated }: { a
   const [emailNotice, setEmailNotice] = useState<EmailNotice | null>(null);
   const [busy, setBusy] = useState(false);
   const queryTokenHandled = useRef(false);
+  const setMode = (next: AuthMode) => { setModeState(next); onModeChange(next); };
 
   useEffect(() => {
     if (queryTokenHandled.current) return;
@@ -277,6 +293,7 @@ function AuthScreen({ apiState, connectionError, onRetry, onAuthenticated }: { a
           {mode === 'login' && <><button type="button" onClick={() => { setMode('forgot'); setError(''); setNotice(''); }}>Forgot password?</button><button type="button" onClick={() => { setMode('customer'); setBusiness(''); setError(''); setNotice(''); }}>Customer portal</button></>}
           {mode === 'customer' && <button type="button" onClick={() => { setMode('login'); setBusiness(''); setError(''); setNotice(''); }}>Back to sign in</button>}
           {(mode === 'forgot' || mode === 'reset') && <button type="button" onClick={() => { setMode('login'); setPassword(''); setError(''); setNotice(''); }}>Back to sign in</button>}
+          <button type="button" onClick={onBackToHome}>Back to ORCA home</button>
         </div>
       </div>
     </section>
@@ -410,6 +427,7 @@ function CatalogArchiveDialog({ target, onClose, onArchive }: { target: CatalogA
 
 export default function App() {
   const { data, patch, apiState, dataMode, connectionError, toast, notify, commit, loadInvoice } = useWorkspace();
+  const [publicMode, setPublicMode] = useState<PublicMode>(() => initialPublicMode());
   const [route, setRoute] = useState<Route>(() => routeFromLocation());
   const [search, setSearch] = useState('');
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -431,6 +449,11 @@ export default function App() {
   const invoiceLoadAttempt = useRef('');
   useEffect(() => {
     try { localStorage.removeItem('orca-copilot-messages'); } catch { /* No local conversation is treated as a completed agent run. */ }
+  }, []);
+  useEffect(() => {
+    const syncPublicMode = () => setPublicMode(initialPublicMode());
+    window.addEventListener('popstate', syncPublicMode);
+    return () => window.removeEventListener('popstate', syncPublicMode);
   }, []);
   useEffect(() => {
     const media = window.matchMedia('(max-width: 700px)');
@@ -943,7 +966,8 @@ export default function App() {
   const newRecordKinds: CreateKind[] = profile.role === 'admin' ? ['customer', 'product', 'plan', 'quotation', 'subscription'] : ['customer', 'quotation', 'subscription'];
   const toastIsError = Boolean(toast && /not saved|not archived|failed|could not|cannot|unavailable|offline|expired|no changes were saved/i.test(toast));
   if (apiState !== 'online' || dataMode !== 'workspace') {
-    return <AuthScreen apiState={apiState} connectionError={connectionError} onRetry={() => window.location.reload()} onAuthenticated={() => window.location.reload()} />;
+    if (publicMode === 'home') return <LandingPage onSignIn={() => { window.history.pushState({}, '', authPath('login')); setPublicMode('login'); }} onCreateWorkspace={() => { window.history.pushState({}, '', authPath('signup')); setPublicMode('signup'); }} />;
+    return <AuthScreen apiState={apiState} connectionError={connectionError} initialMode={publicMode} onModeChange={(mode) => { window.history.replaceState({}, '', authPath(mode)); setPublicMode(mode); }} onBackToHome={() => { window.history.pushState({}, '', '/'); setPublicMode('home'); }} onRetry={() => window.location.reload()} onAuthenticated={() => window.location.reload()} />;
   }
   return <div className={`app-shell ${mobileNavOpen ? 'nav-open' : ''}`}>
     <aside id="orca-sidebar" className="sidebar" ref={sidebarRef} aria-label="Workspace sidebar" aria-hidden={isMobileViewport && !mobileNavOpen}>

@@ -5,6 +5,7 @@ The ORCA frontend and PostgreSQL-backed Go API are deployed. The frontend is pub
 ## Vercel frontend
 
 - Project: `orca`, connected to `https://github.com/ChristopherJoshy/Orca.git`, production branch `main`.
+- `orca` is the sole ORCA Vercel project. Three unused duplicate projects that were also connected to this repository have been removed; their build failures did not affect the canonical production deployment.
 - Production URL: `https://orca-orcin.vercel.app`.
 - Build: Vite from the repository root; `npm ci --prefix frontend`, `npm --prefix frontend run build`, output `frontend/dist`; Node 24.x.
 - The production `ORCA_PUBLIC_URL` project variable is set to the canonical HTTPS origin so MCP OAuth discovery points to the live site. No API database or provider secrets are stored in Vercel.
