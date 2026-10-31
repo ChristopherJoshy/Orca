@@ -14,12 +14,6 @@
       "destination": "https://3.110.118.112/orca-mcp/mcp"
     },
     {
-      "source": "/mcp",
-      "headers": [
-        { "key": "Cache-Control", "value": "no-store, private" }
-      ]
-    },
-    {
       "source": "/mcp/:path*",
       "destination": "https://3.110.118.112/orca-mcp/mcp/:path*"
     },
@@ -37,6 +31,12 @@
     },
     {
       "source": "/mcp/:path*",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-store, private" }
+      ]
+    },
+    {
+      "source": "/mcp",
       "headers": [
         { "key": "Cache-Control", "value": "no-store, private" }
       ]

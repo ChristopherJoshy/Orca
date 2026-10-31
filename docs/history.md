@@ -165,3 +165,9 @@
 - Documented the owner-approved VPS target and external SSH key location in `AGENTS.md`; the private key contents remain outside the repository.
 - Clarified that deployment requires an explicit hosting phase and available target credentials.
 - **Verification:** `git diff --check` passed. No remote service was changed by this documentation update.
+
+## 2026-10-31 — Correct Vercel MCP cache-header routing
+
+- Removed the invalid `headers` property from the `/mcp` rewrite and moved its private, uncached response header into the top-level Vercel `headers` configuration.
+- **Verification:** JSON parsing and `vercel deploy --dry` passed; the dry-run inspected the Vite project and uploaded nothing.
+- **Not deployed:** the owner will run the Vercel deployment after the VPS API is ready.
