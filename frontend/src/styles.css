@@ -765,12 +765,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .auth-brand { display: flex; align-items: center; gap: 12px; }
 .auth-brand-mark { width: 40px; height: 40px; display: grid; place-items: center; border: 1px solid #e2dceb; border-radius: 12px; color: #6e50b3; background: #fff; }
 .auth-brand-name { color: #262433; font-size: 24px; font-weight: 750; letter-spacing: -.06em; }
-.auth-brand-divider { height: 20px; width: 1px; margin: 0 5px; background: #d8d2e2; }
-.auth-brand-caption { color: #686273; font-size: 10px; font-weight: 700; letter-spacing: .14em; }
 .auth-story-copy { width: 100%; max-width: 500px; margin: auto 0; padding: 52px 0 20px; }
-.auth-eyebrow { display: inline-flex; align-items: center; gap: 10px; color: #6e50b3; font-size: 11px; font-weight: 700; letter-spacing: .14em; }
-.auth-eyebrow i { width: 7px; height: 7px; border-radius: 50%; background: #8061c2; box-shadow: 0 0 0 4px rgba(110,80,179,.12); }
-.auth-story-copy h2 { margin: 25px 0 20px; color: #262433; font-size: clamp(42px, 4.2vw, 64px); line-height: 1; font-weight: 600; letter-spacing: -.065em; }
+.auth-story-copy h2 { margin: 0 0 20px; color: #262433; font-size: clamp(42px, 4.2vw, 64px); line-height: 1; font-weight: 600; letter-spacing: -.065em; }
 .auth-story-copy h2 em { color: #6e50b3; font-style: normal; }
 .auth-story-copy > p { max-width: 450px; margin: 0; color: #625e6d; font-size: 16px; line-height: 1.75; }
 .auth-story-next { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-top: 34px; padding-top: 22px; border-top: 1px solid rgba(104, 98, 115, .18); color: #5d5867; font-size: 14px; }

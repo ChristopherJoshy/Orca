@@ -31,3 +31,4 @@ Each implementation commit has a consecutively numbered Markdown record. The com
 - [0026 — Verify refined landing page production release](0026-live-responsive-landing-release.md)
 - [0027 — Refine the responsive ORCA sign-in entry](0027-responsive-auth-entry.md)
 - [0028 — Verify the live responsive authentication release](0028-live-auth-entry-verification.md)
+- [0029 — Remove authentication micro-labels](0029-remove-auth-micro-labels.md)

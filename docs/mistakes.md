@@ -8,6 +8,13 @@
 - **Regression evidence:** local browser review at 1440×960, 1024×768, 768×1024, 390×844, and 320×740 found no horizontal overflow; Axe reported zero violations at desktop and phone sizes. Typecheck, lint, and production build passed. Commit `354344a` reached `READY` on Vercel; the live auth session loaded without a connection error, and sign-in, signup, reset, and customer portal views rendered. No account form was submitted.
 - **Prevention:** use a visual reference for auth screens, keep login copy subordinate to the form, and review a desktop, tablet, and phone screenshot plus accessibility before releasing changes.
 
+## 2026-10-31 — Sign-in story retained unnecessary micro-labels
+
+- **Observed:** owner review identified the “Billing workspace” and “Subscriptions · recurring billing” labels as unwanted in the login view.
+- **Correction:** removed both labels and their decorative separator/dot; retained the ORCA mark and primary statement.
+- **Verification:** not run at the user's request.
+- **Prevention:** keep the sign-in story limited to the brand mark, one statement, supporting sentence, and workspace switch.
+
 ## 2026-10-31 — Public landing typography and tablet layout were too constrained
 
 - **Observed:** owner review found the public-home copy too small and the content frame overly centered. Browser inspection also showed the header actions touching the navigation and the billing-principles row clipping at tablet width.

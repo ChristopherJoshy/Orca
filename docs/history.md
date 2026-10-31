@@ -225,3 +225,8 @@
 - **Verification:** frontend typecheck, lint, production build, and `git diff --check` passed. `agent-browser` checked 1440×960, 1024×768, 768×1024, 390×844, and 320×740; no horizontal overflow was present. Axe reported zero violations at desktop and phone sizes. The mobile workspace switch opened the signup form.
 - **Live verification:** commit `354344a` reached `READY` on the canonical Vercel project. The deployed sign-in page loaded without a connection error and its API-backed fields were enabled. Browser navigation opened workspace creation, password recovery, and customer portal forms; Axe reported zero violations at desktop login, mobile signup, and the customer portal view.
 - **Limit:** the static local preview returned HTTP 500 from its auth-session request. No login or signup form was submitted and no test account was created during this visual review.
+
+## 2026-10-31 — Remove auth micro-labels
+
+- Removed the “Billing workspace” caption and the “Subscriptions · recurring billing” eyebrow, including their separator and dot, from the sign-in story panel. Kept the ORCA mark and main billing statement.
+- **Verification:** not run at the user's request. The previous auth release's responsive and production checks are recorded above.

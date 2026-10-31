@@ -298,8 +298,8 @@ function AuthScreen({ apiState, connectionError, initialMode, onModeChange, onBa
       </section>
       <section className="auth-story" aria-label="About ORCA">
         <div className="auth-story-inner">
-          <div className="auth-brand"><span className="auth-brand-mark"><Icon name="overview" size={21} /></span><span className="auth-brand-name">orca</span><span className="auth-brand-divider" /><span className="auth-brand-caption">BILLING WORKSPACE</span></div>
-          <div className="auth-story-copy"><span className="auth-eyebrow"><i /> SUBSCRIPTIONS · RECURRING BILLING</span><h2>Every cycle,<br /><em>accounted for.</em></h2><p>Plans, invoices, and payments in one workspace. Every total keeps its source.</p>
+          <div className="auth-brand"><span className="auth-brand-mark"><Icon name="overview" size={21} /></span><span className="auth-brand-name">orca</span></div>
+          <div className="auth-story-copy"><h2>Every cycle,<br /><em>accounted for.</em></h2><p>Plans, invoices, and payments in one workspace. Every total keeps its source.</p>
             <div className="auth-story-next"><span>{switchPrompt}</span><button type="button" className="auth-story-switch" onClick={switchMode}>{switchLabel}<Icon name="arrow" size={16} /></button></div>
           </div>
         </div>
