@@ -143,3 +143,25 @@
 - Added route coverage for renewing a closed subscription whose prior expiry has passed; the customer portal's owner-scoped pause/resume coverage remains in place.
 - **Verification:** focused lifecycle tests, frontend typecheck/build, `make verify`, and `git diff --check` passed.
 - **Known limits:** full cross-product policy matrix and subscription future-start browser acceptance remain open.
+
+## 2026-10-31 — Catalog maintenance, quote pricing, and filtered finance exports
+
+- Added version-checked admin editing and soft archival for products and plans, including variants, plan lifecycle flags, and explicit confirmation that archived catalog terms remain on existing subscriptions. Catalog creation is admin-only and public create input cannot set internal archive state.
+- Added plan and product variant selection to direct quotations, subscriptions, and quotation templates. The API resolves prices, taxes, names, and additive variant adjustments from the business catalog; template-backed quotes ignore caller-supplied replacement lines and quote totals use the exact calculation engine including line taxes.
+- Added business-local inclusive report date filters to the summary API and CSV export for the selected Revenue, Invoicing, Collections, or Receivables report. CSV output neutralizes spreadsheet formulas and control prefixes.
+- Corrected term-end catch-up: billing now creates any due periods that started on or before the inclusive expiry date before stopping later periods; auto-close is audited.
+- **Verification:** `make verify` passed after implementation: Go tests, race detector, `go vet`, TypeScript typecheck, lint alias, and production build. `git diff --check` and OpenAPI parsing are recorded with the numbered change record. A real-account browser journey cannot be repeated until the local PostgreSQL/API services are available; previous account-backed evidence remains in the earlier entries.
+- **Open:** clean-schema migration acceptance for catalog archiving, full role acceptance, and provider/performance checks remain incomplete.
+
+## 2026-10-31 — ORCA-reviewed Copilot subscription lifecycle proposals
+
+- Extended Copilot proposals and server-side ORCA approval execution to pause, resume, and renew subscriptions, with plan permission, actor membership, subscription state, exact input, and version revalidation. MCP remains proposal-only.
+- Updated the product-agent action matrix and review guidance, including business-local renewal dates and status/version checks.
+- **Verification:** covered by the combined `make verify` run after integration. Real Groq tool execution and restart-safe agent runs remain unverified.
+- **Open:** complete Copilot website-action coverage and durable run resumption remain incomplete.
+
+## 2026-10-31 — Contributor VPS deployment access notes
+
+- Documented the owner-approved VPS target and external SSH key location in `AGENTS.md`; the private key contents remain outside the repository.
+- Clarified that deployment requires an explicit hosting phase and available target credentials.
+- **Verification:** `git diff --check` passed. No remote service was changed by this documentation update.
