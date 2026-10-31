@@ -6,6 +6,10 @@ ORCA is a finance workspace: calm, precise, spacious, and efficient. Use a light
 
 The public home page uses a typography-led layout, generous white space, and a small lavender accent. It explains ORCA's actual product areas without invented customer logos, performance claims, sample business records, or demo actions. Sign in and workspace creation are available from the first screen; protected app routes keep their account entry.
 
+## Authentication entry
+
+Sign in and workspace creation use a centered, rounded split card on a pale lavender canvas. Keep the API-backed form on the left and a short ORCA product statement with the account-mode action on the right. Keep only the ORCA mark and the mode switch above the form on mobile; hide the story panel before the two-column form becomes cramped. Preserve customer access and password recovery links in the form footer. Avoid a feature list or repeated marketing copy inside authentication. API connection and validation errors stay visible and actionable; never present a disabled form as ready.
+
 Keep public-home body copy at 16px or larger on desktop and 15px or larger on phones; short metadata may be smaller but should remain at least 10px. Use a wide content frame on large displays, then stack the hero, navigation, and principle rail before tablet widths make them cramped.
 
 ## Color roles and contrast

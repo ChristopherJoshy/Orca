@@ -217,3 +217,10 @@
 - Updated the README and deployment guide with the hosted URL, production routing, service state, and remaining provider/acceptance work. No demo account or sample production records were added.
 - **Verification:** local production frontend build passed; Vercel deployment reached `READY`; direct VPS API health, Vercel same-origin API health, and OAuth discovery returned HTTP 200; `nginx -t` passed; PostgreSQL reported all nine application migrations applied.
 - **Open:** Resend and Stripe credentials are not configured, no real test account has been created, automated database backups are not configured, and the full browser workflow remains to be exercised.
+
+## 2026-10-31 — Simplify the responsive authentication entry
+
+- Replaced the full-height auth split and feature list with a centered white-and-lavender card, a single concise product statement, and one workspace-mode action. Kept sign-in and workspace creation API-backed; mobile keeps the mode switch beside the ORCA mark, while customer portal and password recovery remain in the form footer.
+- Improved page heading semantics and label contrast, gave API status cards space from the fields, and shortened the new-password placeholder for narrow screens.
+- **Verification:** frontend typecheck, lint, production build, and `git diff --check` passed. `agent-browser` checked 1440×960, 1024×768, 768×1024, 390×844, and 320×740; no horizontal overflow was present. Axe reported zero violations at desktop and phone sizes. The mobile workspace switch opened the signup form.
+- **Limit:** this local preview returned HTTP 500 from its auth-session request and kept the form disabled. No login or signup request was submitted; the live deployment must be checked after the release.

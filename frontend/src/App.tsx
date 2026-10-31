@@ -260,30 +260,29 @@ function AuthScreen({ apiState, connectionError, initialMode, onModeChange, onBa
   const title = mode === 'login' ? 'Welcome back.' : mode === 'signup' ? 'Start with a clear view.' : mode === 'customer' ? 'Access your account.' : mode === 'forgot' ? 'Reset your password.' : 'Choose a new password.';
   const description = mode === 'login' ? 'Sign in to your billing workspace.' : mode === 'signup' ? 'Create a business workspace with your first admin account.' : mode === 'customer' ? 'Link a verified email to your customer record.' : mode === 'forgot' ? 'We’ll send a secure reset link if the account can receive email.' : 'Use a strong password to secure your account.';
   const inputDisabled = busy || isLoading || apiState === 'offline' || Boolean(connectionError);
+  const switchLabel = mode === 'login' ? 'Create workspace' : mode === 'signup' ? 'Sign in' : 'Back to sign in';
+  const switchPrompt = mode === 'login' ? 'New to ORCA?' : mode === 'signup' ? 'Already have a workspace?' : 'Return to your workspace';
+  const switchMode = () => {
+    setMode(mode === 'login' ? 'signup' : 'login');
+    setError(''); setNotice(''); setPassword('');
+    if (mode !== 'login') setBusiness('');
+  };
 
   return <main className="auth-page">
-    <section className="auth-story" aria-label="About ORCA">
-      <div className="auth-story-orbit orbit-one" /><div className="auth-story-orbit orbit-two" />
-      <div className="auth-story-inner">
-        <div className="auth-brand"><span className="auth-brand-mark"><Icon name="overview" size={21} /></span><span className="auth-brand-name">orca</span><span className="auth-brand-divider" /><span className="auth-brand-caption">BILLING WORKSPACE</span></div>
-        <div className="auth-story-copy"><span className="auth-eyebrow"><i /> SUBSCRIPTION OPERATIONS</span><h1>Every cycle,<br /><em>accounted for.</em></h1><p>Reliable recurring billing, explainable invoices, and a workspace that keeps every number connected to its source.</p>
-          <div className="auth-feature-list"><div><span><Icon name="invoices" size={17} /></span><strong>Invoice Truth</strong><small>See how every total was calculated.</small></div><div><span><Icon name="reports" size={17} /></span><strong>Billing Control Tower</strong><small>Understand what needs attention.</small></div><div><span><Icon name="spark" size={17} /></span><strong>ORCA Copilot</strong><small>Move work forward with review built in.</small></div></div>
-        </div>
-      </div>
-    </section>
-    <section className="auth-main" aria-labelledby="auth-title">
-      <div className="auth-card">
-        <h2 id="auth-title">{title}</h2><p className="auth-description">{description}</p>
+    <div className="auth-layout">
+      <section className="auth-main" aria-labelledby="auth-title">
+        <div className="auth-mobile-brand"><span className="auth-mobile-brand-lockup"><span className="auth-brand-mark"><Icon name="overview" size={20} /></span><span className="auth-brand-name">orca</span></span><button type="button" onClick={switchMode}>{switchLabel}</button></div>
+        <div className="auth-card">
+        <h1 id="auth-title">{title}</h1><p className="auth-description">{description}</p>
         {isLoading && <div className="auth-connection" role="status"><span className="auth-spinner" />Checking your secure workspace connection…</div>}
         {!isLoading && apiState === 'offline' && <div className="auth-connection auth-connection-error" role="alert"><Icon name="close" size={17} /><span>{connectionError || 'ORCA could not reach the API. Start the backend and database, then try again.'}</span><button type="button" onClick={onRetry}>Retry</button></div>}
         {!isLoading && apiState === 'online' && connectionError && <div className="auth-connection auth-connection-error" role="alert"><Icon name="close" size={17} /><span>{connectionError}</span><button type="button" onClick={onRetry}>Retry</button></div>}
-        {!['forgot', 'reset'].includes(mode) && <div className="auth-mode-tabs" role="group" aria-label="Account type"><button type="button" aria-pressed={mode === 'login'} onClick={() => { setMode('login'); setError(''); setNotice(''); }}>Sign in</button><button type="button" aria-pressed={mode === 'signup'} onClick={() => { setMode('signup'); setError(''); setNotice(''); }}>Create workspace</button></div>}
         {mode === 'customer' && <div className="auth-context-note">Customer portal access is connected by your business and verified account email.</div>}
         <form className="auth-form" onSubmit={submit}>
           {mode === 'signup' && <label className="auth-field"><span>Business name</span><input name="businessName" autoComplete="organization" value={business} onChange={(event) => setBusiness(event.target.value)} placeholder="Your company" required disabled={inputDisabled} /></label>}
           {mode === 'customer' && <label className="auth-field"><span>Business ID</span><input name="businessId" value={business} onChange={(event) => setBusiness(event.target.value)} placeholder="From your invoice or invitation" required disabled={inputDisabled} /></label>}
           {mode !== 'reset' && <label className="auth-field"><span>Email address</span><input name="email" type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@company.com" required disabled={inputDisabled} /></label>}
-          {mode !== 'forgot' && <label className="auth-field"><span>{mode === 'reset' ? 'New password' : 'Password'}{mode !== 'reset' && mode !== 'login' && <small>At least 9 characters</small>}</span><input name="password" type="password" autoComplete={mode === 'login' ? 'current-password' : 'new-password'} value={password} onChange={(event) => setPassword(event.target.value)} placeholder={mode === 'login' ? 'Enter your password' : 'Use uppercase, lowercase, and a special character'} minLength={mode === 'login' ? undefined : 9} required disabled={inputDisabled} /></label>}
+          {mode !== 'forgot' && <label className="auth-field"><span>{mode === 'reset' ? 'New password' : 'Password'}{mode !== 'reset' && mode !== 'login' && <small>At least 9 characters</small>}</span><input name="password" type="password" autoComplete={mode === 'login' ? 'current-password' : 'new-password'} value={password} onChange={(event) => setPassword(event.target.value)} placeholder={mode === 'login' ? 'Enter your password' : 'Create a strong password'} minLength={mode === 'login' ? undefined : 9} required disabled={inputDisabled} /></label>}
           {mode !== 'login' && mode !== 'forgot' && mode !== 'reset' && <p className="auth-password-hint">Use at least 9 characters with uppercase, lowercase, and a special character.</p>}
           {error && <p className="auth-message auth-message-error" role="alert">{error}</p>}
           {notice && <p className="auth-message auth-message-success" role="status">{notice}</p>}
@@ -295,8 +294,17 @@ function AuthScreen({ apiState, connectionError, initialMode, onModeChange, onBa
           {(mode === 'forgot' || mode === 'reset') && <button type="button" onClick={() => { setMode('login'); setPassword(''); setError(''); setNotice(''); }}>Back to sign in</button>}
           <button type="button" onClick={onBackToHome}>Back to ORCA home</button>
         </div>
-      </div>
-    </section>
+        </div>
+      </section>
+      <section className="auth-story" aria-label="About ORCA">
+        <div className="auth-story-inner">
+          <div className="auth-brand"><span className="auth-brand-mark"><Icon name="overview" size={21} /></span><span className="auth-brand-name">orca</span><span className="auth-brand-divider" /><span className="auth-brand-caption">BILLING WORKSPACE</span></div>
+          <div className="auth-story-copy"><span className="auth-eyebrow"><i /> SUBSCRIPTIONS · RECURRING BILLING</span><h2>Every cycle,<br /><em>accounted for.</em></h2><p>Plans, invoices, and payments in one workspace. Every total keeps its source.</p>
+            <div className="auth-story-next"><span>{switchPrompt}</span><button type="button" className="auth-story-switch" onClick={switchMode}>{switchLabel}<Icon name="arrow" size={16} /></button></div>
+          </div>
+        </div>
+      </section>
+    </div>
     {emailNotice && <EmailUnavailableDialog value={emailNotice} onClose={() => setEmailNotice(null)} />}
   </main>;
 }

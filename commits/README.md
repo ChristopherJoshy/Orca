@@ -29,3 +29,4 @@ Each implementation commit has a consecutively numbered Markdown record. The com
 - [0024 — Verify the public homepage production release](0024-live-public-landing-release.md)
 - [0025 — Improve public landing responsiveness and type](0025-responsive-landing-refinement.md)
 - [0026 — Verify refined landing page production release](0026-live-responsive-landing-release.md)
+- [0027 — Refine the responsive ORCA sign-in entry](0027-responsive-auth-entry.md)

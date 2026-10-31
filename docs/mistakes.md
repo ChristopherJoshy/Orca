@@ -1,5 +1,13 @@
 # Verified mistakes and prevention
 
+## 2026-10-31 — Sign-in screen was too dense and visually heavy
+
+- **Observed:** owner review rejected the sign-in presentation and supplied a simpler split-card reference.
+- **Cause:** the auth route used a full-height split layout with three product-feature blurbs competing with the login form, and duplicated account-mode choices in tabs.
+- **Correction:** moved to a centered white-and-lavender split card, shortened the product copy, made the workspace switch a single clear action, and carried that switch into the compact mobile header. Added a single page-level heading, corrected small-label contrast, and shortened the password placeholder.
+- **Regression evidence:** local browser review at 1440×960, 1024×768, 768×1024, 390×844, and 320×740 found no horizontal overflow; Axe reported zero violations at desktop and phone sizes. Typecheck, lint, and production build passed. The local preview's auth-session request returned HTTP 500, so account creation and sign-in submission were not tested in this UI pass.
+- **Prevention:** use a visual reference for auth screens, keep login copy subordinate to the form, and review a desktop, tablet, and phone screenshot plus accessibility before releasing changes.
+
 ## 2026-10-31 — Public landing typography and tablet layout were too constrained
 
 - **Observed:** owner review found the public-home copy too small and the content frame overly centered. Browser inspection also showed the header actions touching the navigation and the billing-principles row clipping at tablet width.
