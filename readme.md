@@ -1,118 +1,129 @@
 # ORCA
 
-**Subscription management with reliable billing, explainable invoices, portable data, and an AI agent for business workflows.**
+**Know what billed, why it billed, and what is still owed.**
 
-ORCA brings the recurring revenue lifecycle into one workspace: configure products and plans, prepare quotations, manage subscriptions, generate invoices, record payments, and review receivables. Invoice calculations keep their source evidence so a business can explain totals later.
+ORCA is a subscription and recurring-billing workspace for teams that need reliable renewals, explainable invoices, and clear receivables. It follows a subscription from product and plan setup through quotation, billing, payment, and finance review.
 
-> **Project status:** Local MVP under active development. Hosting and deployment are owner-managed and have not been performed. This is not production-ready billing software; the remaining work and evidence are tracked in the [acceptance matrix](docs/requirements.md).
+> **Project status:** Working local MVP for the Odoo Hackathon. Provider delivery, durable scheduling, full agent coverage, performance targets, and production hosting still need verification. ORCA is not production-ready billing software; see the [acceptance matrix](docs/requirements.md) for implementation evidence and open work.
 
-## What ORCA supports
+## The product idea
 
-| Workflow | Current implementation |
+Brightloop's billing pain is not just that invoices are created by hand. The team cannot prove why a total changed, whether every renewal was billed exactly once, or how much cash is still outstanding. ORCA makes those questions part of the product.
+
+The design bet is **visible billing integrity**:
+
+- **Invoice Truth:** show the stored line inputs, discount and tax steps, billing period, calculation version, and hash behind an invoice. The model never invents or calculates authoritative totals.
+- **Billing Control Tower:** show measured billing and integrity data from the workspace so a finance lead can review drafts, overdue balances, journal balance, and invoice-hash checks.
+- **Human-reviewed automation:** Copilot uses scoped domain tools to investigate and prepare actions. Consequential actions require an ORCA review tied to the exact target and inputs.
+
+Subscription lifecycle and invoice automation are established product capabilities across the market. For example, Stripe documents recurring subscriptions, invoice previews, and prorations for subscription and quantity changes. ORCA's focus is to make the resulting billing evidence and operational state inspectable in one small workspace, rather than compete on feature count. See [Stripe subscription updates](https://docs.stripe.com/api/subscriptions/update) and [invoice previews](https://docs.stripe.com/api/invoices/create_preview).
+
+## What works in this build
+
+| Area | Current implementation |
 |---|---|
-| Identity and tenancy | Business-admin signup, customer portal signup, password verification/reset flows, revocable sessions, CSRF protection, and business-scoped records |
-| Catalog and subscriptions | Products with variants, billing plans, taxes, discounts, quotations, and subscription lifecycle workflows |
-| Invoice Truth | Draft recurring invoices with decimal calculations, discount-before-tax ordering, stored snapshots, calculation explanations, engine version, and canonical hash |
-| Billing and payments | Invoice confirmation/cancellation, manual payment allocation, balanced journal entries, and customer Stripe Checkout for confirmed INR invoices |
-| Stripe safety | Test-mode Checkout session creation, signed webhook verification, idempotent event processing, and reconciliation records for unmatched or inconsistent successful payments |
-| Finance reports | Revenue, invoicing, collections, and receivables summaries with all-time, month, quarter, and year filters |
-| Copilot | Optional Groq tool calling for scoped search, reports, invoice explanations, simulations, and approval proposals for a limited set of actions |
-| Data portability | Full or filtered private ZIP exports with related JSON/CSV records, invoice HTML, manifest, counts, and checksums |
-| External MCP | Official Go SDK Streamable HTTP server with OAuth discovery, PKCE, scoped grants, ORCA consent, and read/propose tools |
-| Workspace | Responsive React screens for billing operations, customer portal, Invoice Truth, reports, exports, and Copilot |
+| Accounts and access | Business-admin signup, customer portal access, email verification/reset flows, revocable sessions, CSRF checks, and business-scoped API authorization |
+| Products and plans | Product types, sales/cost prices, variants, tax rules, daily/weekly/monthly/yearly plans, minimum quantities, availability dates, and pause/close/renew settings |
+| Quotes and subscriptions | Quotations with validity, plan-backed lines, and Draft → Quotation → Confirmed → Active → Closed lifecycle; customer ownership and plan permissions are enforced in the API |
+| Recurring billing | On-demand billing run creates draft invoices from due subscriptions; period uniqueness prevents duplicate invoices. A durable scheduler and crash-safe catch-up worker are not implemented yet. |
+| Invoice Truth | Stored calculation snapshot, exact decimal amounts, discount-before-tax ordering, half-up line rounding, calculation-engine version, explanation steps, and canonical hash |
+| Payments and finance | Manual payment allocations, partial balances, balanced journal entries, invoice status and receivables reports; Stripe Checkout is test-mode only and posts payment from verified webhooks |
+| Reporting | Revenue, invoicing, collections, and receivables views with time filters and measured invoice/journal integrity values |
+| ORCA Copilot | Optional Groq tool loop for scoped search, reports, invoice explanations, previews, and review proposals for a limited set of billing actions |
+| Data exports | Full or filtered private ZIP archives with related JSON/CSV records, printable invoice HTML, manifest, checksums, and download expiry |
+| External MCP | Official Go SDK Streamable HTTP endpoint, OAuth discovery, PKCE, scoped grants, ORCA consent, and read/propose tools; mutations still require ORCA review |
+| Team workspace | Admins can add an existing verified ORCA account as staff in the current workspace. This flow grants access immediately and does not send invitation email. |
 
-The API enforces authorization and tenant boundaries. The UI does not determine payable amounts or mark Stripe invoices as paid; the verified provider webhook and ORCA ledger do.
+The frontend never decides who owns a record or whether an invoice is paid. Authorization, calculations, payment reconciliation, and business writes are enforced by the Go API and PostgreSQL.
 
-## Quick start
+## Hackathon team
 
-### Prerequisites
+- **Christopher Joshy — Team Leader**
+- **AjithJoshy — Team Member**
 
-- Go **1.27.1** (pinned in `backend/go.mod`)
-- Node.js **20+** and npm
-- PostgreSQL **15+**, with a database role allowed to run migrations
+Project registration: [Odoo Hackathon project 78320](https://hackathon.odoo.com/hackathon/details/78320) (the portal requires participant sign-in).
 
-### Configure and run
+Repository: [ChristopherJoshy/Orca](https://github.com/ChristopherJoshy/Orca)
+
+## Run locally
+
+### Requirements
+
+- Go version declared in `backend/go.mod` (currently Go 1.27.1)
+- Node.js 20 or newer and npm
+- PostgreSQL 15 or newer, with a role that can run migrations
+
+### Start the app
 
 ```sh
 cp .env.example .env
-# Set DATABASE_URL for your PostgreSQL installation.
+# Set DATABASE_URL to a PostgreSQL database you control.
 npm ci --prefix frontend
 make dev
 ```
 
-The checked-in database URL targets the local build environment's Unix socket on port `54329`. A typical local PostgreSQL URL looks like:
+Open [http://localhost:5173](http://localhost:5173). Vite proxies `/api`, `/mcp`, and `/.well-known` to the local Go API. Goose migrations run when the API starts. In local development, signup verifies the account automatically so the normal account flow can be tested without an email provider.
 
-```dotenv
-DATABASE_URL=postgresql://orca:your-local-password@127.0.0.1:5432/orca?sslmode=disable
-```
-
-Open [http://localhost:5173](http://localhost:5173). The Vite development server and Go API bind to loopback; Vite proxies `/api`, `/mcp`, and `/.well-known` to the API. Database migrations run when the API starts. Local signup automatically verifies accounts so the core workflow can be exercised without email delivery.
-
-ORCA requires PostgreSQL and a real signed-in account. It does not ship demo users, sample business data, a local file store, or writable browser-only records. If the API or database is unavailable, the app shows that connection problem and does not substitute sample data. Create a disposable workspace through the normal signup screen and use its API-backed records for local testing; see the [local test journey](docs/demo.md).
+ORCA has no demo workspace, sample business records, file-store fallback, or writable browser-only data. Create a disposable account through the sign-up screen and use its PostgreSQL-backed records. The [local test journey](docs/demo.md) describes a real-account workflow; test credentials are not stored in Git.
 
 ### Optional providers
 
-Provider keys are optional. Keep them in the ignored root `.env`, never in source, screenshots, logs, commits, or exports.
+Provider credentials belong in the ignored root `.env` for local work, or the provider's secret manager/environment settings for hosting. Never commit them.
 
 | Variable | Purpose |
 |---|---|
-| `GROQ_API_KEY` | Enables Copilot model calls; `GROQ_MODEL` defaults to `openai/gpt-oss-120b` |
-| `STRIPE_SECRET_KEY` | Enables customer Checkout; use a Stripe **test-mode** secret key (`sk_test_…`) |
-| `STRIPE_WEBHOOK_SECRET` | Verifies signed Stripe webhook requests; point the test endpoint at `POST /api/v1/webhooks/stripe` |
-| `RESEND_API_KEY` | Optional email provider configuration; delivery workflows are not complete |
+| `GROQ_API_KEY` | Enables Copilot calls; `GROQ_MODEL` defaults to `openai/gpt-oss-120b` |
+| `STRIPE_SECRET_KEY` | Enables Checkout; use an `sk_test_…` key for the current test-mode integration |
+| `STRIPE_WEBHOOK_SECRET` | Verifies `POST /api/v1/webhooks/stripe` signatures |
+| `RESEND_API_KEY` | Email provider credential; end-to-end delivery still needs verification |
+| `EMAIL_FROM` | Verified sender for provider email |
 
-Stripe Checkout is currently limited to a customer's own confirmed INR invoice with an outstanding balance. The browser return URL is informational; only a verified webhook can record a Stripe payment. Provider sandbox flows should be exercised before relying on them. See [integration contracts](docs/integrations.md) and [security rules](docs/security.md).
+Stripe's browser return page does not mark an invoice paid. Only a verified, idempotent webhook records a payment. See the [integration contract](docs/integrations.md) and [security contract](docs/security.md).
 
 ## Verify changes
-
-Run from the repository root:
 
 ```sh
 make verify
 ```
 
-This runs Go unit tests, the race detector, `go vet`, TypeScript type checking, the current `lint` alias, and a production frontend build. The `lint` alias currently runs TypeScript checking; ESLint is not configured.
-
-PostgreSQL integration tests use an isolated disposable schema. Example:
-
-```sh
-cd backend
-ORCA_TEST_DATABASE_URL='postgresql://orca@localhost/orca?host=/tmp&port=54329&sslmode=disable' \
-  go test ./internal/orca -run 'TestPostgres(HTTPBillingFlow|InvoicePeriodUniqueConstraint)$' -count=1
-```
-
-The complete verification history and browser evidence are in [docs/history.md](docs/history.md). Check the [acceptance matrix](docs/requirements.md) for work that is still partial or pending.
+This runs Go unit tests, the race detector, `go vet`, TypeScript checks, the current lint alias, and a Vite production build. `npm run lint` currently aliases TypeScript checking; ESLint is not configured. Database integration tests use a disposable schema; see [testing](docs/testing.md).
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-  Browser[React and Vite workspace] -->|same-origin requests| API[Go API and domain services]
-  API --> DB[(PostgreSQL)]
-  API --> Groq[Groq, optional]
-  API --> Stripe[Stripe Checkout and signed webhooks]
+  User[Admin, staff, or customer] --> Web[React and Vite]
+  Web -->|same-origin API calls| API[Go and chi domain API]
+  API -->|transactions and migrations| DB[(PostgreSQL)]
+  API --> Stripe[Stripe test Checkout and webhooks]
+  API --> Groq[Optional Groq Copilot]
   API --> MCP[Streamable HTTP MCP]
 ```
 
-- **Frontend:** React 18, TypeScript, Vite, accessible custom controls, and responsive CSS.
-- **Backend:** Go, chi, pgx, Goose, PostgreSQL, exact decimal arithmetic, and the official Go MCP SDK.
-- **Financial records:** invoice snapshots and hashes, transactional payment allocation, journal, audit, and outbox evidence.
-- **Local routing:** Vite proxies authenticated API and MCP traffic to the Go service; authenticated API responses are not cached.
+- **Frontend:** React 18, TypeScript, Vite, custom accessible controls, and responsive CSS.
+- **Backend:** Go, chi, pgx, Goose migrations, exact decimal arithmetic, and the official Go MCP SDK.
+- **Financial integrity:** PostgreSQL-backed transactions, unique billing-period identities, immutable invoice evidence, payment allocation, journal, audit, and outbox records.
+- **Authentication:** server-side revocable sessions in PostgreSQL, HTTP-only cookies, CSRF checks, and role/tenant authorization in the API.
+- **MCP and Copilot:** both call typed domain tools; neither receives unrestricted SQL access.
 
-## Current limits
+PostgreSQL's `SKIP LOCKED` supports queue-like multi-consumer work, while unique constraints enforce identities under concurrent writes. Those are sound foundations for future durable billing workers; they do not mean the current MVP already has a multi-worker scheduler. See the [PostgreSQL locking clause](https://www.postgresql.org/docs/current/sql-select.html#SQL-FOR-UPDATE-SHARE) and [constraints](https://www.postgresql.org/docs/current/ddl-constraints.html).
 
-ORCA is an active local MVP. Durable River workers and crash recovery, complete Copilot page-action coverage and restart-safe execution, durable export jobs and cleanup, server-side filtered report APIs and report export, credit notes and separately prorated adjustments, complete edit/archive flows, production email delivery, and performance targets remain open. MCP registration/authorization state and export processing are currently process-bound. The exact status, evidence, and gaps are listed in [docs/requirements.md](docs/requirements.md).
+## Current limits and next work
+
+The main unfinished acceptance items are durable recurring billing and downtime recovery, full subscription/discount/payment boundary coverage, complete Copilot action coverage and restart-safe runs, durable export jobs and cleanup, credit notes and prorated adjustments, production email, complete role-based browser acceptance, and measured performance with thousands of records. MCP provider compatibility and Stripe sandbox workflows also need direct end-to-end verification. The [requirements matrix](docs/requirements.md) is the source of truth for scope and status.
+
+Hosting is being prepared separately and has not been performed. Do not treat this repository as production-ready until the database, email, payment, HTTPS, export storage, backups, and worker recovery have been configured and verified. See [deployment](docs/deployment.md).
 
 ## Project map
 
 ```text
-backend/                 Go API, domain logic, PostgreSQL migrations, and tests
-frontend/                React, TypeScript, Vite, and responsive workspace
-docs/                    Requirements, architecture, contracts, and verification evidence
-commits/                 Numbered records referenced by Conventional Commits
-AGENTS.md                Canonical contributor entry point and repository rules
-Makefile                 Local run and verification commands
+backend/                 Go API, domain logic, migrations, tests
+frontend/                React, TypeScript, Vite, responsive workspace
+docs/                    Product requirements, architecture, and contracts
+commits/                 Numbered implementation and verification records
+AGENTS.md                Contributor guide, backend details, and repo rules
+Makefile                 Local development and verification commands
 readme.md                Product overview and local setup
 ```
 
-Start with the [documentation index](docs/index.md). The [billing contract](docs/billing.md), [API contract](docs/api/openapi.yaml), [Copilot policy](docs/agents.md), [export contract](docs/exports.md), and [MCP contract](docs/mcp.md) describe current behavior and constraints. The original brief and its interpretation are captured in [the requirements source](docs/references/requirements-source.md).
+Start with the [documentation index](docs/index.md). Read the [billing](docs/billing.md), [API](docs/api/openapi.yaml), [Copilot](docs/agents.md), [exports](docs/exports.md), [MCP](docs/mcp.md), and [security](docs/security.md) contracts before changing those areas.

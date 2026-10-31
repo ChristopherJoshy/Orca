@@ -54,3 +54,11 @@
 - Added audit logging with the member's UUID as the resource ID and tests for cross-business access, audit identity, and rejection of unverified accounts.
 - **Verification:** Go tests passed. Against local PostgreSQL, adding an existing verified account returned HTTP 201 and a page reload showed the active Staff member in the workspace table. `git diff --check` passed.
 - **Known limit:** staff members must already have a verified ORCA account; this path does not send invitation email.
+
+## 2026-10-31 — Product narrative and backend setup guide
+
+- Reworked the README to state the competition problem, ORCA's evidence-first product thesis, implemented behavior, team credits, architecture, and remaining limits without claiming unfinished automation or production readiness.
+- Added backend runtime, cookie, tenant, environment, and private ingress guidance to the canonical contributor guide. Added the local Vite proxy and export-directory variables to environment examples; no secrets were added.
+- **Research:** linked official Stripe subscription/proration/invoice-preview references and PostgreSQL locking/constraint references. The product differentiation is framed as inspectable billing evidence and operational integrity, not a claim that ORCA has more features than established platforms.
+- **Verification:** manual content/claim review and `git diff --check` passed. No application behavior changed.
+- **Deferred:** Vercel rewrite configuration and VPS setup are scheduled for the later hosting phase requested by the owner.
