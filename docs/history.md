@@ -92,3 +92,11 @@
 - Added tests for January 31 monthly anchors, multiple missed periods, repeat runs, future start dates, business isolation, failure isolation, and cancellation. Updated the README, contributor/environment guide, billing contract, architecture, deployment handoff, and acceptance matrix.
 - **Verification:** `make verify` passed (Go tests, race detector, `go vet`, frontend typecheck, lint alias, production build); focused catch-up/worker tests passed; `git diff --check` passed.
 - **Known limits:** worker tests use the in-memory store; clean-schema PostgreSQL worker and sustained multi-worker/1,000-subscription load acceptance remain open. Email/outbox delivery is still not implemented.
+
+## 2026-10-31 — Vercel and VPS hosting preparation
+
+- Created and linked a dedicated Vercel `orca` project, configured it for Vite, Node 24, `npm ci --prefix frontend`, the frontend build, and `frontend/dist` output.
+- Added a root `vercel.json` with SPA deep-link fallback, same-origin uncached API/MCP rewrites to unique Nginx prefixes, and baseline response headers. Added a production-build step that creates MCP OAuth discovery files as static assets because Vercel reserves `/.well-known` from rewrites.
+- Added deployment templates for the loopback-only `127.0.0.1:8081` systemd service and additive Nginx routes, plus a VPS environment template. The existing VPS has Nginx on 80/443, an IP TLS certificate with an active renewal timer, and no listener on 8081; AWS ingress was not changed.
+- **Verification:** frontend typecheck/lint/build passed; `vercel deploy --dry` recognized Vite, honored `.vercelignore`, found the configured output, and included both generated `.well-known` files. The Vercel project settings were read back after update.
+- **Not yet deployed:** production database credentials and exact project production domain must be set before the API service and public routing can be verified end to end.

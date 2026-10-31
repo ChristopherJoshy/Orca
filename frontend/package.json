@@ -10,7 +10,7 @@
     "dev": "vite --host 127.0.0.1",
     "typecheck": "tsc --noEmit",
     "lint": "tsc --noEmit --pretty false",
-    "build": "vite build",
+    "build": "node scripts/generate-mcp-discovery.mjs && vite build",
     "preview": "vite preview --host 127.0.0.1"
   },
   "dependencies": {

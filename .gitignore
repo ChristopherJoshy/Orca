@@ -8,6 +8,7 @@
 frontend/node_modules/
 frontend/dist/
 frontend/.vite/
+frontend/public/.well-known/
 backend/bin/
 backend/.data/
 backend/tmp/
@@ -20,3 +21,7 @@ coverage/
 
 .DS_Store
 Thumbs.db
+.vercel
+.env*
+!.env.example
+!**/.env.example
