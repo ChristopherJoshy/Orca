@@ -154,6 +154,48 @@ func TestCustomerRoleCannotReadBusinessWideReports(t *testing.T) {
 	}
 }
 
+func TestCustomerCanPauseAndResumeOwnedSubscriptionWhenPlanAllows(t *testing.T) {
+	store := &Store{state: NewState()}
+	now := time.Now().UTC()
+	const businessID, userID, customerID, planID, subscriptionID = "business", "customer-user", "customer", "plan", "subscription"
+	store.state.Users[userID] = User{ID: userID, Email: "customer@example.test", EmailNormalized: "customer@example.test", Verified: true, CreatedAt: now}
+	store.state.Businesses[businessID] = Business{ID: businessID, Name: "Example", Currency: CurrencyINR, Timezone: "UTC"}
+	store.state.Memberships[membershipKey(businessID, userID)] = Membership{BusinessID: businessID, UserID: userID, CustomerID: customerID, Role: "customer"}
+	store.state.Customers[customerID] = Customer{ID: customerID, BusinessID: businessID, UserID: userID, Email: "customer@example.test", CreatedAt: now}
+	store.state.Plans[planID] = Plan{ID: planID, BusinessID: businessID, AllowPause: true}
+	store.state.Subscriptions[subscriptionID] = Subscription{ID: subscriptionID, BusinessID: businessID, CustomerID: customerID, PlanID: planID, Status: "Active", Version: 1}
+	const sessionToken, csrfToken = "customer-self-service-session", "customer-self-service-csrf"
+	store.state.Sessions[tokenDigest(sessionToken)] = Session{UserID: userID, BusinessID: businessID, Role: "customer", CustomerID: customerID, CSRFToken: tokenDigest(csrfToken), ExpiresAt: now.Add(time.Hour)}
+	handler := NewAPI(store, ServerConfig{Env: "test", CookieSecure: false, AllowedOrigin: "http://localhost:5173"})
+	transition := func(action string) *httptest.ResponseRecorder {
+		t.Helper()
+		version := store.state.Subscriptions[subscriptionID].Version
+		body, err := json.Marshal(map[string]any{"action": action, "expectedVersion": version})
+		if err != nil {
+			t.Fatal(err)
+		}
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/subscriptions/"+subscriptionID+"/transition", bytes.NewReader(body))
+		req.AddCookie(&http.Cookie{Name: "orca_session", Value: sessionToken})
+		req.Header.Set("Origin", "http://localhost:5173")
+		req.Header.Set("X-CSRF-Token", csrfToken)
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		return rec
+	}
+	if paused := transition("pause"); paused.Code != http.StatusOK {
+		t.Fatalf("customer pause returned %d: %s", paused.Code, paused.Body.String())
+	}
+	if got := store.state.Subscriptions[subscriptionID]; got.Status != "Paused" || len(got.PauseIntervals) != 1 || got.PauseIntervals[0].End != nil {
+		t.Fatalf("pause interval was not opened: %+v", got)
+	}
+	if resumed := transition("resume"); resumed.Code != http.StatusOK {
+		t.Fatalf("customer resume returned %d: %s", resumed.Code, resumed.Body.String())
+	}
+	if got := store.state.Subscriptions[subscriptionID]; got.Status != "Active" || got.PauseIntervals[0].End == nil {
+		t.Fatalf("pause interval was not closed on resume: %+v", got)
+	}
+}
+
 func TestCustomerSignupCreatesBusinessScopedPortalAccess(t *testing.T) {
 	store := &Store{state: NewState()}
 	now := time.Now().UTC()

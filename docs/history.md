@@ -113,3 +113,10 @@
 - Added API coverage for a future-starting discount and reversed date bounds, updated the OpenAPI contract and requirements matrix, and made the discount table show the validity window.
 - **Verification:** focused discount API test passed; `make verify` passed, including race checks, vet, typecheck, lint alias, and production build; `git diff --check` passed.
 - **Known limits:** concurrency and failed-attempt discount consumption still need acceptance coverage; availability decisions for invoices remain based on the billing engine's effective service date.
+
+## 2026-10-31 — Customer subscription pause and resume
+
+- Added a resume action to the customer portal for paused subscriptions whose plan permits pausing; renamed the pause action to describe the immediate state change accurately.
+- Added an API test proving an authenticated customer can pause and resume their own subscription, with an open pause interval created and then closed on resume. The endpoint continues to enforce customer ownership and plan permission.
+- **Verification:** focused Go route test passed; `make verify` and `git diff --check` passed.
+- **Known limits:** customer self-service remains limited to pause/resume; broader lifecycle policy coverage remains open.

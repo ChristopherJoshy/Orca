@@ -14,3 +14,4 @@ Each implementation commit has a consecutively numbered Markdown record. The com
 - [0010 — Vercel and VPS hosting preparation](0010-vercel-vps-hosting-preparation.md)
 - [0011 — Sharpen the ORCA product README](0011-product-readme.md)
 - [0012 — Complete discount validity controls](0012-discount-validity.md)
+- [0013 — Complete customer pause and resume controls](0013-customer-subscription-self-service.md)
