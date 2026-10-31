@@ -12,3 +12,4 @@ Each implementation commit has a consecutively numbered Markdown record. The com
 - [0008 — Simplify authentication entry copy](0008-simplify-auth-entry-copy.md)
 - [0009 — Automatic recurring billing catch-up](0009-automatic-billing-catchup.md)
 - [0010 — Vercel and VPS hosting preparation](0010-vercel-vps-hosting-preparation.md)
+- [0011 — Sharpen the ORCA product README](0011-product-readme.md)

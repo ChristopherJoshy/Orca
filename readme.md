@@ -1,6 +1,6 @@
 # ORCA
 
-**Know what billed, why it billed, and what is still owed.**
+**Know what was billed, why it was billed, and what remains owed.**
 
 ORCA is a subscription and recurring-billing workspace for teams that need reliable renewals, explainable invoices, and clear receivables. It follows a subscription from product and plan setup through reusable offers that customers can accept, staff conversion, billing, payment, and finance review.
 
@@ -10,11 +10,13 @@ ORCA is a subscription and recurring-billing workspace for teams that need relia
 
 Brightloop's billing pain is not just that invoices are created by hand. The team cannot prove why a total changed, whether every renewal was billed exactly once, or how much cash is still outstanding. ORCA makes those questions part of the product.
 
-The design bet is **visible billing integrity**:
+ORCA is built around **visible billing integrity**. The difference is in how the system handles evidence and recovery:
 
 - **Invoice Truth:** show the stored line inputs, discount and tax steps, billing period, calculation version, and hash behind an invoice. The model never invents or calculates authoritative totals.
 - **Billing Control Tower:** show measured billing and integrity data from the workspace so a finance lead can review drafts, overdue balances, journal balance, and invoice-hash checks.
 - **Human-reviewed automation:** Copilot uses scoped domain tools to investigate and prepare actions. Consequential actions require an ORCA review tied to the exact target and inputs.
+
+These are concrete product choices: period uniqueness is enforced in PostgreSQL, billing catches up after downtime, and a saved invoice keeps the calculation inputs used at the time. The Control Tower and Invoice Truth views make those records available to the team. This is a focused reliability approach, not a claim that ORCA has broader billing coverage than established platforms.
 
 Subscription lifecycle and invoice automation are established product capabilities across the market. For example, Stripe documents recurring subscriptions, invoice previews, and prorations for subscription and quantity changes. ORCA's focus is to make the resulting billing evidence and operational state inspectable in one small workspace, rather than compete on feature count. See [Stripe subscription updates](https://docs.stripe.com/api/subscriptions/update) and [invoice previews](https://docs.stripe.com/api/invoices/create_preview).
 
@@ -34,7 +36,7 @@ Subscription lifecycle and invoice automation are established product capabiliti
 | External MCP | Official Go SDK Streamable HTTP endpoint, OAuth discovery, PKCE, scoped grants, ORCA consent, and read/propose tools; mutations still require ORCA review |
 | Team workspace | Admins can add an existing verified ORCA account as staff in the current workspace. This flow grants access immediately and does not send invitation email. |
 
-The frontend never decides who owns a record or whether an invoice is paid. Authorization, calculations, payment reconciliation, and business writes are enforced by the Go API and PostgreSQL.
+The frontend never decides who owns a record or whether an invoice is paid. Authorization, calculations, payment reconciliation, and business writes are enforced by the Go API and PostgreSQL. The app has no demo workspace or sample business data: workspace screens read records from the signed-in account's database business.
 
 ## Hackathon team
 
@@ -110,9 +112,9 @@ PostgreSQL's `SKIP LOCKED` supports queue-like multi-consumer work, while unique
 
 ## Current limits and next work
 
-The main unfinished acceptance items are durable recurring billing and downtime recovery, full subscription/discount/payment boundary coverage, complete Copilot action coverage and restart-safe runs, durable export jobs and cleanup, credit notes and prorated adjustments, production email, complete role-based browser acceptance, and measured performance with thousands of records. MCP provider compatibility and Stripe sandbox workflows also need direct end-to-end verification. The [requirements matrix](docs/requirements.md) is the source of truth for scope and status.
+The remaining acceptance work includes clean-schema PostgreSQL and sustained concurrency checks for the billing worker; broader subscription, discount, and partial-payment boundary coverage; complete Copilot action coverage and restart-safe runs; durable export jobs and archive cleanup; credit notes and prorated adjustments; production email; full role-based browser acceptance; and measured performance with thousands of records. MCP provider compatibility and a live Stripe test-mode checkout also need end-to-end verification. The [requirements matrix](docs/requirements.md) is the source of truth for scope and status.
 
-Hosting is being prepared separately and has not been performed. Do not treat this repository as production-ready until the database, email, payment, HTTPS, export storage, backups, and worker recovery have been configured and verified. See [deployment](docs/deployment.md).
+Vercel and VPS hosting configuration is prepared in the repository, but no production deployment has been performed. Do not treat this repository as production-ready until the database, email, payment, HTTPS, export storage, backups, and worker recovery have been configured and verified. See [deployment](docs/deployment.md).
 
 ## Project map
 

@@ -100,3 +100,8 @@
 - Added deployment templates for the loopback-only `127.0.0.1:8081` systemd service and additive Nginx routes, plus a VPS environment template. The existing VPS has Nginx on 80/443, an IP TLS certificate with an active renewal timer, and no listener on 8081; AWS ingress was not changed.
 - **Verification:** frontend typecheck/lint/build passed; `vercel deploy --dry` recognized Vite, honored `.vercelignore`, found the configured output, and included both generated `.well-known` files. The Vercel project settings were read back after update.
 - **Not yet deployed:** production database credentials and exact project production domain must be set before the API service and public routing can be verified end to end.
+
+## 2026-10-31 — Product README and team credits
+
+- Refined the README around ORCA's verified billing-evidence and recovery approach, clarified that workspace records are account-backed with no demo workspace, updated the current acceptance gaps, and included the two confirmed hackathon team members.
+- **Verification:** `git diff --check -- readme.md` passed. No team details were inferred from evaluator information.
