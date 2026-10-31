@@ -17,6 +17,7 @@ These documents define the product and its implementation contracts. They do not
 | [agents.md](agents.md) | Built-in Copilot tools, run persistence, approvals, and recovery |
 | [mcp.md](mcp.md) | External Streamable HTTP MCP, authorization, scopes, and proposals |
 | [demo.md](demo.md) | Local account-backed end-to-end test journey and expected outcomes |
+| [screenshots.md](screenshots.md) | Every workspace, portal, and mobile screen with current UI context |
 | [history.md](history.md) | Dated change and verification log |
 | [mistakes.md](mistakes.md) | Verified mistakes, corrections, and prevention |
 | [api/openapi.yaml](api/openapi.yaml) | Versioned REST contract |

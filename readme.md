@@ -141,7 +141,7 @@ flowchart LR
 - **PostgreSQL 15+** with a role that can run migrations
 - Optional provider keys if you want to exercise email, Stripe, or Groq
 
-### Four commands
+### Three commands
 
 ```sh
 cp .env.example .env

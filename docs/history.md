@@ -171,3 +171,12 @@
 - Removed the invalid `headers` property from the `/mcp` rewrite and moved its private, uncached response header into the top-level Vercel `headers` configuration.
 - **Verification:** JSON parsing and `vercel deploy --dry` passed; the dry-run inspected the Vite project and uploaded nothing.
 - **Not deployed:** the owner will run the Vercel deployment after the VPS API is ready.
+
+## 2026-10-31 — Visual README and full screenshot gallery
+
+- Rebuilt the README around the invoice question, the three product ideas, a workflow feature map, real screenshots, a Mermaid architecture view, local setup, verification, and explicit remaining limits.
+- Captured every workspace and customer-portal screen at 1440 px wide, plus the workspace and portal at 390×844, from a disposable local account. Optimized the set to 20 WebP files under `docs/assets/screenshots/` and added a custom SVG banner.
+- Added `docs/screenshots.md` with grouped galleries and context for overview, reports, Copilot, customers, catalog, plans, quotations, subscriptions, invoices, Invoice Truth, payments, settings, discounts, taxes, team, exports, portal, and mobile views. Linked it from the README and documentation index.
+- Deleted the disposable businesses, users, memberships, and all seeded billing, payment, export, and audit records after capture. Removed temporary credentials and helper files. No demo data, seed mode, or browser fallback was added to the product.
+- **Verification:** `make verify` passed (tests, race detector, vet, TypeScript typecheck, lint alias, and production build). Every local image and document link resolves; README and gallery anchors resolve; `git diff --check` passed.
+- **Known limits:** a few captures show development copy defects, including Invoice Truth label concatenation and an export status rendering issue. They are recorded as UI follow-up work rather than presented as finished polish.
