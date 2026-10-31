@@ -1,0 +1,48 @@
+# Requirements and acceptance matrix
+
+This matrix joins the source subscription-management brief with the expanded ORCA plan. Status describes the current implementation and evidence as of **2026-10-31**. **Partial** means some workflow paths exist but the complete acceptance check is still open. No full requirement is marked complete without full-scope evidence.
+
+| ID | Requirement | Current evidence and open work | Status |
+|---|---|---|---|
+| ID-1 | Unique email, verification/reset, strong password, revocable secure sessions, abuse controls | Argon2id/password, CSRF, session revocation, and duplicate/expiry tests; local signup/session smoke passed. Real email delivery and production verification/reset delivery remain untested. | Partial |
+| ID-2 | Business admin, restricted staff, customer portal | Tenant reads and cross-business isolation are tested; customer signup links by business ID plus matching email, customer reads are ownership-scoped, and customer-wide reports are denied. Production verification and the complete role matrix remain open. | Partial |
+| CAT-1 | Products with type, sales/cost price, notes, variants and additive price adjustments | Product creation and variant persistence exercised in the API flow; complete edit/archive and quote-to-invoice variant behavior are open. | Partial |
+| CAT-2 | Billing plans with daily/weekly/monthly/yearly cadence, quantity floor, availability and lifecycle policy | Plan creation and calendar-anchor tests exist; full availability and lifecycle permission matrix is open. | Partial |
+| QUO-1 | Reusable quotation templates with product/plan lines and validity | Quotation creation and validity dates are implemented; template CRUD and accepted-quotation conversion acceptance are open. | Partial |
+| SUB-1 | Numbered subscription and line details; Draft → Quotation → Confirmed → Active → Closed | Numbering and Draft → Quotation → Confirmed → Active were exercised in the HTTP-to-PostgreSQL flow; close, future-start activation, and customer ownership matrix remain open. | Partial |
+| SUB-2 | Pause/resume/early close/renew only when plan allows it | Transition handler checks plan flags and records pause intervals; full policy matrix is not yet tested. | Partial |
+| INV-1 | Generate recurring drafts with copied customer/line/tax evidence; confirm/cancel/send/print | Stored snapshot and hash, invoice confirmation, and payment flow exercised; outbox email delivery and print/browser acceptance remain open. | Partial |
+| INV-2 | No skipped/duplicate periods; catch-up after downtime | Calendar anchor tests and PostgreSQL period uniqueness test pass; durable worker, crash/restart, and multi-worker catch-up acceptance remain open. | Partial |
+| DISC-1 | Admin-only fixed/percentage discounts, dates, threshold, usage cap, target scope | Fixed-discount pennies, threshold logic, and atomic transaction paths exist; concurrency, failed-attempt, date, and all scope cases need acceptance coverage. | Partial |
+| PAY-1 | Record manual payments and allocations; partial/outstanding/overdue views | Idempotent manual payment, balance update, journal, full-payment flow, and report integrity exercised; partial-payment and overdue report cases remain open. | Partial |
+| PAY-2 | Stripe checkout and verified idempotent webhook handling | Webhook signature verification and event deduplication scaffold exists. Checkout and event-to-payment reconciliation are not implemented. | Pending |
+| REP-1 | Filtered active subscriptions, recurring revenue, invoice, collection, receivable and overdue reports | Summary aggregates and journal/hash integrity values exist; selectable filters and full report acceptance remain open. | Partial |
+| FIN-1 | INR exact decimal math, discounts before tax, half-up line rounding | Decimal, half-up, fixed-discount allocation, and tax tests exist; complete boundary/property coverage remains open. | Partial |
+| FIN-2 | Immutable calculation snapshot, engine version, explanation, canonical hash | Local workflow verified persisted engine version, explanation and hash; finalized-record mutation and canonical reproducibility tests remain open. | Partial |
+| FIN-3 | Transactional invoice, balanced journal, audit/outbox and idempotency | Transactional PostgreSQL writes, balanced journal checks, audit/outbox insertion, invoice hash check, and payment idempotency exist; rollback/failure-injection coverage remains open. | Partial |
+| FIN-4 | Reversals and separately identified prorated adjustments | Unpaid confirmed invoice cancellation can reverse entries; credit notes and separately prorated adjustments are not implemented. | Pending |
+| CTRL-1 | Invoice Truth uses stored evidence; Control Tower uses measured pipeline/integrity data | Invoice Truth reads stored snapshots and the report exposes measured journal/hash/outbox values. Durable worker and provider pipeline metrics are missing. | Partial |
+| AG-1 | Built-in Copilot covers business actions across every page | Groq tool calling supports scoped search, reports, invoice evidence, invoice preview, and proposals for five billing actions. Catalog/setup CRUD, quotations, settings, exports, bulk actions, and full page coverage remain open. | Partial |
+| AG-2 | Durable multi-step runs, progress, results, cancellation, partial failure, safe resume | Bounded six-step/eight-call tool loop, persisted transcript/outcome, cancellation, and failure reporting exist. In-flight runs are process goroutines; restart recovery and safe resume remain open. | Partial |
+| AG-3 | Consequential actions require ORCA approval bound to actor, business, exact input and record versions | Proposals store canonical input hashes, resource versions, and expiry. Approval revalidates proposer membership and current version, then atomically executes supported invoice/payment/subscription actions and stores the result. Outbox delivery and the broader action matrix remain open. | Partial |
+| EXP-1 | Full and filtered async exports, manifest, checksums, snapshot, expiry, private download | Full and resource-filtered ZIPs include related records, JSON/CSV, printable invoice HTML, manifest/checksums, and a repeatable-read snapshot. Customer exports are owner-scoped and downloads expire after 24 hours. Crash-safe jobs, periodic artifact deletion, finer staff scope, and PDF remain open. | Partial |
+| EXP-2 | JSON preserves data; CSV formula injection neutralized | JSON is lossless; CSV formula/control-prefix escaping has focused adversarial tests. | Partial |
+| MCP-1 | Streamable HTTP MCP, OAuth discovery/PKCE/scoped grants/expiry/revoke | Official Go SDK Streamable HTTP server, discovery, DCR, S256 PKCE consent, scoped hashed one-hour grants, membership checks, and revocation are tested. DCR/code state is process-local; there are no refresh tokens or third-party client certification. | Partial |
+| MCP-2 | External clients can read and propose only; execution needs approval | Scoped search/explanation/report/simulation and proposal tools are implemented. MCP cannot execute mutations directly; ORCA approval executes supported actions after server-side checks. Export-request tool and broad action coverage remain open. | Partial |
+| UX-1 | Accessible light responsive experience for desktop/tablet/mobile and keyboard | Responsive UI and semantic controls are implemented; browser and accessibility walkthrough was unavailable in this environment. | Partial |
+| PERF-1 | Ordinary pages under two seconds with thousands of records | No repeatable seeded-data latency measurement yet. | Pending |
+| EXT-1 | Real email, Stripe, Groq/MCP provider behavior verified | Resend and Stripe webhook adapters are present; no real provider sandbox run or complete Groq/MCP workflow has been verified. | Pending |
+
+## Scope interpretation
+
+The source brief explicitly requires the subscription lifecycle, recurring invoices, product/plan setup, discounts, payment tracking, role-specific portal, and filtered finance reports. The expanded ORCA plan adds immutable invoice evidence, durable jobs, the agent, exports, and external MCP. These are product requirements, not completion claims. Hosting is excluded from the present build; see [deployment](deployment.md).
+
+## Verification record
+
+- `make verify` — passed: Go tests, race detector, `go vet`, TypeScript typecheck, current lint alias, and production build.
+- PostgreSQL HTTP billing flow passed in an isolated schema through Goose migration 005, including subscription close approval result and MCP grant create/read/revoke persistence.
+- PostgreSQL invoice-period uniqueness test passed in an isolated schema.
+- Copilot tool, approval execution/staleness/idempotency, cancellation, export filter/CSV/HTML, and MCP OAuth/Streamable HTTP tests passed.
+- Local API smoke exercised signup, CSRF rejection, product/customer/plan/discount/quotation/subscription creation, billing, immutable invoice evidence, confirmation, payment, report integrity, ZIP export, and a second business with an empty product list — passed after the empty-list and discount request-shape fixes.
+- Frontend typecheck, current lint alias, and production build passed after Copilot approval-result UI changes; see [history](history.md).
+- Browser UI walkthrough — not run; `agent-browser` could not start its daemon and the browser access host was unavailable.

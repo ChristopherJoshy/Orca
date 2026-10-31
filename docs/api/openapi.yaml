@@ -1,0 +1,431 @@
+openapi: 3.1.0
+info:
+  title: ORCA API
+  version: 1.0.0
+  description: Versioned subscription, billing, reporting, agent, export, and MCP management API. Tenant scope derives from the authenticated session.
+servers:
+  - url: /api/v1
+security:
+  - sessionCookie: []
+paths:
+  /health:
+    get:
+      security: []
+      summary: Liveness and readiness without secret values
+      responses:
+        '200': { description: Service status }
+  /auth/signup:
+    post:
+      security: []
+      summary: Create a business admin account or a customer portal account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              oneOf:
+                - required: [email, password, businessName]
+                - required: [email, password, businessId]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string, minLength: 9, writeOnly: true }
+                businessName: { type: string, minLength: 1 }
+                businessId: { type: string, format: uuid, description: Selects an existing business customer record matching this email. }
+      responses:
+        '201': { description: Business or local-development account created }
+        '202': { description: Customer access request accepted; verification may be required }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /auth/login:
+    post:
+      security: []
+      summary: Start a server-side session
+      responses:
+        '200': { description: Session established with secure cookie }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /auth/logout:
+    post:
+      summary: Revoke current session
+      responses:
+        '204': { description: Session revoked }
+  /auth/verify-email:
+    post:
+      security: []
+      summary: Verify an email with a one-time token and establish a session
+      responses:
+        '200': { description: Email verified; session cookie and CSRF token returned }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /auth/password-reset:
+    post:
+      security: []
+      summary: Request a password-reset email without revealing account existence
+      responses:
+        '202': { description: Request accepted }
+  /auth/password-reset/complete:
+    post:
+      security: []
+      summary: Set a new password with a one-time reset token
+      responses:
+        '204': { description: Password changed and prior sessions revoked }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /me:
+    get:
+      summary: Get the current actor, user, and business
+      responses:
+        '200': { description: Current session context }
+  /portal/me:
+    get:
+      summary: Get the signed-in customer's linked customer record
+      responses:
+        '200': { description: Customer self-service context }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /products:
+    get:
+      summary: List business products
+      responses:
+        '200':
+          description: Product page
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProductPage' }
+    post:
+      summary: Create a product
+      responses:
+        '201': { description: Product created }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /plans:
+    get:
+      summary: List billing plans
+      responses:
+        '200': { description: Plan page }
+    post:
+      summary: Create a plan
+      responses:
+        '201': { description: Plan created }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /customers:
+    get:
+      summary: List authorized business customers
+      responses:
+        '200': { description: Customer page }
+    post:
+      summary: Create customer record
+      responses:
+        '201': { description: Customer created }
+  /quotations:
+    get:
+      summary: List quotations in the current business or customer scope
+      responses:
+        '200': { description: Quotation collection; empty results use an empty items array }
+    post:
+      summary: Prepare quotation from a customer and immutable line inputs
+      responses:
+        '201': { description: Quotation prepared }
+  /quotations/{id}/send:
+    post:
+      summary: Queue a quotation email request
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      responses:
+        '202': { description: Email request queued to the outbox }
+  /quotations/{id}/accept:
+    post:
+      summary: Accept a sent quotation as its linked customer
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      responses:
+        '200': { description: Quotation accepted }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /subscriptions:
+    get:
+      summary: List subscriptions visible to actor
+      responses:
+        '200': { description: Subscription page }
+    post:
+      summary: Prepare subscription draft
+      responses:
+        '201': { description: Draft subscription created }
+  /subscriptions/{id}/transition:
+    post:
+      summary: Request an allowed lifecycle transition
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      responses:
+        '200': { description: Updated subscription }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /invoices:
+    get:
+      summary: List authorized invoices with balance/status filters
+      responses:
+        '200': { description: Invoice page }
+  /invoices/{id}:
+    get:
+      summary: Retrieve invoice, stored calculation snapshot, and balance
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      responses:
+        '200': { description: Invoice evidence }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /invoices/{id}/confirm:
+    post:
+      summary: Confirm and post a draft invoice
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      responses:
+        '200': { description: Confirmed invoice and posting reference }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /invoices/{id}/cancel:
+    post:
+      summary: Cancel a draft or reverse an unpaid confirmed invoice
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      responses:
+        '200': { description: Invoice cancelled; finalized evidence is preserved }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /invoices/{id}/send:
+    post:
+      summary: Queue an invoice email request
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      responses:
+        '202': { description: Email request queued to the outbox }
+  /invoices/{id}/payments:
+    post:
+      summary: Record and allocate a manual payment (approval policy applies)
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      responses:
+        '201': { description: Payment allocation recorded }
+  /billing/run:
+    post:
+      summary: Generate due draft invoices and advance billing cursors
+      responses:
+        '200': { description: Number of invoices generated in this run }
+  /payments:
+    get:
+      summary: List authorized payment records
+      responses:
+        '200': { description: Payment collection }
+  /discounts:
+    get:
+      summary: List business discounts
+      responses:
+        '200': { description: Discount collection }
+    post:
+      summary: Create a fixed or percentage discount
+      responses:
+        '201': { description: Discount created }
+  /taxes:
+    get:
+      summary: List business tax rules
+      responses:
+        '200': { description: Tax-rule collection }
+    post:
+      summary: Create a tax rule
+      responses:
+        '201': { description: Tax rule created }
+  /staff:
+    get:
+      summary: List active business members
+      responses:
+        '200': { description: Staff collection }
+    post:
+      summary: Invite an existing ORCA account as staff
+      responses:
+        '201': { description: Membership created }
+  /staff/invitations:
+    post:
+      summary: Create a staff invitation
+      responses:
+        '201': { description: Invitation accepted or membership created }
+  /reports/summary:
+    get:
+      summary: Business finance and integrity aggregates
+      responses:
+        '200': { description: Summary with currency and as-of time }
+  /exports:
+    get:
+      summary: List export jobs visible to the current actor
+      responses:
+        '200': { description: Export job collection }
+    post:
+      summary: Queue an authorized full or filtered export
+      responses:
+        '202': { description: Export job accepted }
+  /agent/runs:
+    get:
+      summary: List the current actor's persisted Copilot runs
+      responses:
+        '200': { description: Run collection }
+    post:
+      summary: Start a bounded Groq Copilot run when the provider is configured
+      responses:
+        '202': { description: Run accepted or recorded as unavailable }
+  /agent/runs/{id}:
+    get:
+      summary: Read persisted Copilot run status
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      responses:
+        '200': { description: Agent run }
+  /agent/runs/{id}/cancel:
+    post:
+      summary: Request cancellation of an unfinished Copilot run
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      responses:
+        '200': { description: Run cancellation recorded }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /agent/approvals:
+    get:
+      summary: List business action reviews
+      responses:
+        '200': { description: Approval collection }
+  /agent/approvals/{id}/decision:
+    post:
+      summary: Approve and execute a supported exact proposal, or reject it
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [decision]
+              properties:
+                decision: { type: string, enum: [approve, reject] }
+      responses:
+        '200':
+          description: Decision and supported action result; approval revalidates permission, input hash, and resource version
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Approval' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /mcp/connections:
+    get:
+      summary: List configured MCP connection records
+      responses:
+        '200': { description: Connection collection; this is management metadata, not an MCP server endpoint }
+    post:
+      summary: Create an MCP connection record
+      responses:
+        '201': { description: Connection record created }
+  /mcp/connections/{id}:
+    delete:
+      summary: Revoke an MCP connection record
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      responses:
+        '204': { description: Connection revoked }
+  /mcp/grants:
+    get:
+      summary: List scoped MCP OAuth grants for this workspace
+      responses:
+        '200': { description: Grant collection; bearer tokens are never returned }
+  /mcp/grants/{id}:
+    delete:
+      summary: Revoke an MCP grant for this workspace
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      responses:
+        '204': { description: Grant revoked }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /webhooks/stripe:
+    post:
+      security: []
+      summary: Receive a Stripe webhook after signature verification
+      responses:
+        '200': { description: Event handled or already processed }
+        '400': { description: Invalid signature or payload }
+  /exports/{id}:
+    get:
+      summary: Get scoped export job status
+      responses:
+        '200': { description: Export status }
+  /exports/{id}/download:
+    get:
+      summary: Download unexpired private export after authorization
+      responses:
+        '200': { description: ZIP file }
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: orca_session
+  parameters:
+    Id:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+  schemas:
+    Money:
+      type: string
+      pattern: '^-?[0-9]+\.[0-9]{2}$'
+      examples: ['1234.50']
+    Error:
+      type: object
+      required: [message]
+      properties:
+        message: { type: string }
+        fields: { type: object, additionalProperties: { type: string } }
+    Product:
+      type: object
+      required: [id, name, type, salesPrice]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        type: { type: string }
+        salesPrice: { $ref: '#/components/schemas/Money' }
+        costPrice: { $ref: '#/components/schemas/Money' }
+        notes: { type: string }
+        variants: { type: array, items: { type: object } }
+        taxRate: { type: string }
+        active: { type: boolean }
+    ProductPage:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/Product' } }
+        nextCursor: { type: [string, 'null'] }
+    Invoice:
+      type: object
+      required: [id, number, status, total, outstanding, currency]
+      properties:
+        id: { type: string, format: uuid }
+        number: { type: string }
+        status: { type: string, enum: [Draft, Confirmed, Paid, Cancelled] }
+        total: { $ref: '#/components/schemas/Money' }
+        outstanding: { $ref: '#/components/schemas/Money' }
+        currency: { type: string, const: INR }
+        overdue: { type: boolean }
+        calculationHash: { type: string }
+    Approval:
+      type: object
+      required: [id, status, action, resourceId]
+      properties:
+        id: { type: string, format: uuid }
+        status: { type: string, enum: [Pending, Approved, Rejected] }
+        action: { type: string }
+        resourceId: { type: string, format: uuid }
+        inputs: { type: object, additionalProperties: true }
+        inputsHash: { type: string }
+        resourceVersion: { type: integer, format: int64 }
+        expiresAt: { type: string, format: date-time }
+        executionResult: { type: object, additionalProperties: true }
+  responses:
+    Unauthorized:
+      description: Authentication required
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Forbidden:
+      description: Actor lacks permission
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    NotFound:
+      description: Resource not found in the actor's scope
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Conflict:
+      description: State or idempotency conflict
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    ValidationError:
+      description: Input validation failed
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }

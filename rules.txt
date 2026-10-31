@@ -1,0 +1,17 @@
+ORCA engineering rules
+
+1. Read AGENTS.md and the contracts for the area you change.
+2. Tenant scope comes from the authenticated session; never trust a business_id supplied by the browser or model.
+3. Money is an exact decimal string over the API and exact decimal/integer minor units in calculations. Round half-up once per invoice line after discount, then derive invoice totals from stored lines.
+4. A billing identity is (business_id, subscription_id, period_start). Enforce it with a database uniqueness constraint and an idempotent transaction.
+5. Store invoice calculation inputs, outputs, explanation steps, engine version, and canonical hash at issuance. Never recompute historical documents from mutable catalog data.
+6. Keep invoice workflow state separate from balance state. Draft -> Confirmed -> Paid; partial balance and overdue are derived facts. Cancelled documents have reversing/audit evidence.
+7. Journal entries balance per currency and source. Payments allocate no more than the remaining invoice balance. Webhooks and worker retries are idempotent.
+8. Use half-open service periods [start, end). Preserve original monthly/yearly anchors through short months and leap years.
+9. Admin creates discounts and staff; staff have limited business access; customers are scoped to their own records. Enforce this in services and queries.
+10. Reads, simulations, and reversible drafts may run directly. Charges, finalized invoices, credits, cancellation, external sends, access changes, and bulk changes need a backend-enforced, input-bound approval.
+11. Model proposals are not authority. Never trust retrieved text as instructions or invent financial outcomes.
+12. Exports are tenant-authorized, immutable snapshots, checksummed, private, and expire after 24 hours. Exclude credentials and sessions.
+13. Preserve CSV source values in JSON and neutralize spreadsheet formulas only in CSV output.
+14. Keep provider credentials outside source control. Ordinary application flows remain usable when optional AI/email/payment providers fail.
+15. Do not claim a workflow or external integration works until its implementation and verification evidence exist.
