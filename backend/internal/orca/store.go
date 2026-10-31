@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"sync"
 
 	"github.com/jackc/pgx/v5"
@@ -47,6 +48,41 @@ func (s *Store) Close() {
 	}
 }
 func (s *Store) IsPostgres() bool { return s.pool != nil }
+
+// BusinessIDs returns only tenant identifiers for system workers. It avoids
+// loading user, customer, or billing data merely to discover worker scope.
+func (s *Store) BusinessIDs(ctx context.Context) ([]string, error) {
+	if s == nil {
+		return nil, errors.New("store is required")
+	}
+	if s.pool == nil {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		ids := make([]string, 0, len(s.state.Businesses))
+		for id := range s.state.Businesses {
+			ids = append(ids, id)
+		}
+		sort.Strings(ids)
+		return ids, nil
+	}
+	rows, err := s.pool.Query(ctx, "SELECT id::text FROM businesses ORDER BY id")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	ids := make([]string, 0)
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return ids, nil
+}
 
 func (s *Store) Migrate(ctx context.Context) error {
 	if s.pool == nil {

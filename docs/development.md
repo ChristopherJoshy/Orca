@@ -52,7 +52,7 @@ The local Go build cache is written to `/tmp/orca-go-cache` by default. Database
 
 ## Implementation boundaries
 
-The code currently uses Go/chi, pgx, Goose, shopspring/decimal, React, TypeScript, and Vite. Implemented additions include a bounded Groq tool loop, approval execution for a limited billing action set, official Go SDK Streamable HTTP MCP with OAuth/PKCE, repeatable-read filtered ZIP exports, and test-mode Stripe Checkout/webhook reconciliation. The broader target still needs River workers, generated OpenAPI client types, TanStack, Tailwind, durable agent and export processing, production email delivery, and complete agent page-action coverage. See the live [requirements matrix](requirements.md) and [change history](history.md).
+The code currently uses Go/chi, pgx, Goose, shopspring/decimal, React, TypeScript, and Vite. Implemented additions include a bounded Groq tool loop, approval execution for a limited billing action set, official Go SDK Streamable HTTP MCP with OAuth/PKCE, repeatable-read filtered ZIP exports, test-mode Stripe Checkout/webhook reconciliation, and an in-process recurring-billing catch-up worker. The broader target still needs durable job orchestration, generated OpenAPI client types, TanStack, Tailwind, durable agent and export processing, production email delivery, and complete agent page-action coverage. See the live [requirements matrix](requirements.md) and [change history](history.md).
 
 ## Change workflow
 

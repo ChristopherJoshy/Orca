@@ -84,3 +84,11 @@
 - Removed the redundant auth card eyebrow and the small `Private by workspace / INR billing / Audit-ready records` footer line. The entry screen now uses the page title and task-specific description for context.
 - Darkened inactive account-tab text to clear WCAG AA contrast against its lavender-gray surface while preserving the existing plum/lavender palette.
 - **Verification:** frontend typecheck and production build passed. Isolated agent-browser inspection at 1440×900, 834×1112, and 390×844 found no horizontal overflow; Axe reported zero violations and zero incomplete checks at all three sizes. `git diff --check` passed.
+
+## 2026-10-31 — Automatic recurring billing catch-up
+
+- Extracted invoice generation into a shared business-scoped service used by the staff endpoint and an in-process worker. The API now catches up every business at startup and on `ORCA_BILLING_INTERVAL` (default one minute), logs a tenant failure and continues, and waits for the worker to stop during shutdown.
+- Added sorted business-ID enumeration without loading tenant records, plus an in-transaction period index to avoid rescanning every invoice for each subscription period. Database advisory locks serialize manual runs and worker passes for the same business; persisted cursors and unique period identities recover missed work.
+- Added tests for January 31 monthly anchors, multiple missed periods, repeat runs, future start dates, business isolation, failure isolation, and cancellation. Updated the README, contributor/environment guide, billing contract, architecture, deployment handoff, and acceptance matrix.
+- **Verification:** `make verify` passed (Go tests, race detector, `go vet`, frontend typecheck, lint alias, production build); focused catch-up/worker tests passed; `git diff --check` passed.
+- **Known limits:** worker tests use the in-memory store; clean-schema PostgreSQL worker and sustained multi-worker/1,000-subscription load acceptance remain open. Email/outbox delivery is still not implemented.

@@ -1,6 +1,7 @@
 package orca
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -254,9 +255,21 @@ func (a *API) runBilling(w http.ResponseWriter, r *http.Request, auth Authentica
 		return
 	}
 	cutoff := time.Now().UTC()
+	count, err := runBillingForBusiness(r.Context(), a.Store, auth.Actor.BusinessID, auth.Actor, cutoff)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	writeJSON(w, 200, map[string]any{"created": count, "asOf": cutoff})
+}
+
+// runBillingForBusiness is shared by the authenticated on-demand endpoint and
+// the system scheduler. Its caller supplies an explicit cutoff so catch-up is
+// deterministic and testable.
+func runBillingForBusiness(ctx context.Context, store *Store, businessID string, actor Actor, cutoff time.Time) (int, error) {
 	count := 0
-	err := a.Store.UpdateFor(r.Context(), auth.Actor.BusinessID, func(st *State) error {
-		business := st.Businesses[auth.Actor.BusinessID]
+	err := store.UpdateFor(ctx, businessID, func(st *State) error {
+		business := st.Businesses[businessID]
 		loc, e := time.LoadLocation(business.Timezone)
 		if e != nil {
 			loc = time.UTC
@@ -264,6 +277,16 @@ func (a *API) runBilling(w http.ResponseWriter, r *http.Request, auth Authentica
 		ids := make([]string, 0, len(st.Subscriptions))
 		for id := range st.Subscriptions {
 			ids = append(ids, id)
+		}
+		invoicePeriods := make(map[string]map[int64]struct{}, len(st.Subscriptions))
+		for _, invoice := range st.Invoices {
+			if invoice.SubscriptionID == "" {
+				continue
+			}
+			if invoicePeriods[invoice.SubscriptionID] == nil {
+				invoicePeriods[invoice.SubscriptionID] = make(map[int64]struct{})
+			}
+			invoicePeriods[invoice.SubscriptionID][invoice.PeriodStart.UTC().UnixNano()] = struct{}{}
 		}
 		for _, id := range ids {
 			v := st.Subscriptions[id]
@@ -312,13 +335,7 @@ func (a *API) runBilling(w http.ResponseWriter, r *http.Request, auth Authentica
 				if e != nil {
 					return e
 				}
-				already := false
-				for _, old := range st.Invoices {
-					if old.SubscriptionID == v.ID && old.PeriodStart.Equal(start.UTC()) {
-						already = true
-						break
-					}
-				}
+				_, already := invoicePeriods[v.ID][start.UTC().UnixNano()]
 				if !already {
 					inputs := make([]CalculationInputLine, 0, len(v.Lines))
 					for _, line := range v.Lines {
@@ -357,12 +374,16 @@ func (a *API) runBilling(w http.ResponseWriter, r *http.Request, auth Authentica
 					due := end.In(loc).AddDate(0, 0, v.PaymentTermsDays).UTC()
 					inv := Invoice{ID: invoiceID, BusinessID: business.ID, SubscriptionID: v.ID, CustomerID: v.CustomerID, Number: number, PeriodStart: start.UTC(), PeriodEnd: end, Status: "Draft", Currency: CurrencyINR, Subtotal: snapshot.Subtotal, DiscountTotal: snapshot.DiscountTotal, TaxTotal: snapshot.TaxTotal, Total: snapshot.Total, Outstanding: snapshot.Total, DueAt: due, Snapshot: snapshot, CalculationHash: hash, Version: 1, CreatedAt: cutoff}
 					st.Invoices[inv.ID] = inv
+					if invoicePeriods[v.ID] == nil {
+						invoicePeriods[v.ID] = make(map[int64]struct{})
+					}
+					invoicePeriods[v.ID][start.UTC().UnixNano()] = struct{}{}
 					if discount != nil && snapshot.DiscountID != "" {
 						d := st.Discounts[discount.ID]
 						d.UseCount++
 						st.Discounts[discount.ID] = d
 					}
-					st.Audit = append(st.Audit, auditEvent(auth.Actor, "invoice.generated", "invoice", inv.ID, map[string]any{"periodStart": start.UTC(), "periodEnd": end}))
+					st.Audit = append(st.Audit, auditEvent(actor, "invoice.generated", "invoice", inv.ID, map[string]any{"periodStart": start.UTC(), "periodEnd": end}))
 					st.Outbox = append(st.Outbox, OutboxEvent{ID: mustNewUUID(), BusinessID: business.ID, Type: "invoice.generated", IdempotencyKey: "invoice.generated:" + inv.ID, Payload: map[string]any{"invoiceId": inv.ID}, CreatedAt: cutoff})
 					count++
 				}
@@ -380,10 +401,9 @@ func (a *API) runBilling(w http.ResponseWriter, r *http.Request, auth Authentica
 		return nil
 	})
 	if err != nil {
-		writeErr(w, err)
-		return
+		return 0, err
 	}
-	writeJSON(w, 200, map[string]any{"created": count, "asOf": cutoff})
+	return count, nil
 }
 func mustNewUUID() string {
 	id, err := newUUID()

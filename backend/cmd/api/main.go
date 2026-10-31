@@ -45,6 +45,16 @@ func main() {
 		StripeAPIKey:        os.Getenv("STRIPE_SECRET_KEY"),
 		StripeWebhookSecret: os.Getenv("STRIPE_WEBHOOK_SECRET"),
 	})
+	billingInterval, err := time.ParseDuration(env("ORCA_BILLING_INTERVAL", orca.DefaultBillingWorkerInterval.String()))
+	if err != nil || billingInterval <= 0 {
+		slog.Warn("invalid ORCA_BILLING_INTERVAL; using default", "value", os.Getenv("ORCA_BILLING_INTERVAL"), "default", orca.DefaultBillingWorkerInterval)
+		billingInterval = orca.DefaultBillingWorkerInterval
+	}
+	billingWorkerDone := orca.StartBillingWorker(ctx, store, billingInterval, slog.Default())
+	defer func() {
+		stop()
+		<-billingWorkerDone
+	}()
 	server := &http.Server{Addr: env("ORCA_ADDR", ":8080"), Handler: api, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 60 * time.Second, IdleTimeout: 60 * time.Second}
 	go func() {
 		<-ctx.Done()

@@ -11,7 +11,7 @@
 
 ## Current implementation
 
-The running API uses Go/chi and pgx with Goose migrations. PostgreSQL requests currently load a business-scoped state snapshot into domain maps and persist a transactional diff; this is an implementation bridge, not the planned sqlc repository layer. The official Go MCP SDK server is mounted on the API process, with OAuth registration/authorization state partly held in memory. There is no River worker. Outbox records are persisted transactionally, but delivery workers are not implemented. See [development](development.md) and the [acceptance matrix](requirements.md) for the remaining gaps.
+The running API uses Go/chi and pgx with Goose migrations. PostgreSQL requests currently load a business-scoped state snapshot into domain maps and persist a transactional diff; this is an implementation bridge, not the planned sqlc repository layer. The official Go MCP SDK server is mounted on the API process, with OAuth registration/authorization state partly held in memory. A cancellable in-process recurring-billing worker catches up each business on startup and a configurable interval; there is no River job queue. Outbox records are persisted transactionally, but email/provider delivery workers are not implemented. See [development](development.md) and the [acceptance matrix](requirements.md) for the remaining gaps.
 
 ## Trust and data flow
 
