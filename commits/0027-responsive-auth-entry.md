@@ -25,4 +25,4 @@
 
 ## Limitations
 
-The local preview's auth-session request returned HTTP 500 and disabled form submission. No login or signup was submitted. Verify the hosted auth-session response after this commit deploys; email-dependent signup still requires configured email delivery.
+The static local preview's auth-session request returned HTTP 500 and disabled form submission. The deployed auth session was subsequently verified without a connection error, but no login or signup was submitted and no test account was created. Email-dependent signup still requires configured email delivery.
