@@ -1,8 +1,6 @@
-<div align="center">
-  <img src="docs/assets/orca-banner.svg" alt="ORCA — subscription billing that can explain itself" width="100%" />
-</div>
-
-<h1 align="center">ORCA</h1>
+<h1 align="center">
+  <img src="frontend/public/assets/orca-logo.png" alt="ORCA" width="190" />
+</h1>
 
 <p align="center">
   <strong>Subscription billing that can explain itself.</strong><br />
@@ -10,9 +8,9 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Go-1.27-00ADD8?style=flat-square&logo=go&logoColor=white" alt="Go 1.27" />
-  <img src="https://img.shields.io/badge/React-18-61DAFB?style=flat-square&logo=react&logoColor=111827" alt="React 18" />
-  <img src="https://img.shields.io/badge/PostgreSQL-15%2B-4169E1?style=flat-square&logo=postgresql&logoColor=white" alt="PostgreSQL 15+" />
+  <img src="https://img.shields.io/badge/Go-1.27-00ADD8?style=flat-square" alt="Go 1.27" />
+  <img src="https://img.shields.io/badge/React-18-61DAFB?style=flat-square" alt="React 18" />
+  <img src="https://img.shields.io/badge/PostgreSQL-15%2B-4169E1?style=flat-square" alt="PostgreSQL 15+" />
   <img src="https://img.shields.io/badge/MCP-Streamable%20HTTP-6E50B3?style=flat-square" alt="MCP Streamable HTTP" />
   <img src="https://img.shields.io/badge/status-hosted%20MVP-286449?style=flat-square" alt="Status: hosted MVP" />
 </p>
@@ -204,7 +202,7 @@ ORCA is deliberately honest about the finish line. The remaining acceptance work
 - Live Resend delivery, a real Stripe test-mode checkout, and full Groq/MCP client verification.
 - Full role-based browser acceptance and measured performance with thousands of records.
 
-The frontend is hosted on Vercel and the Go API runs behind Nginx on the VPS. Production sign-up, email, payment, backup, and end-to-end workflows still need owner-provided provider configuration and acceptance. No demo workspace or sample production records were added. See [deployment](docs/deployment.md) and the [requirements matrix](docs/requirements.md).
+The frontend is hosted on Vercel and the Go API runs behind Nginx on the VPS. Workspace signup and login work without email verification; automatic password recovery, customer portal verification, and document delivery remain unavailable without a funded email provider. Stripe, backups, and some end-to-end workflows still need configuration and acceptance. No demo workspace or sample production records were added. See [deployment](docs/deployment.md) and the [requirements matrix](docs/requirements.md).
 
 ## Hackathon team
 

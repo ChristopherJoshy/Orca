@@ -127,8 +127,8 @@ function CreateRecordDialog({ kind, data, onClose, onSave }: {
   const [busy, setBusy] = useState(false);
   const set = (key: string, value: string | boolean) => setValues((current) => ({ ...current, [key]: value }));
   const v = (key: string) => String(values[key] ?? '');
-  const title: Record<typeof kind, string> = { customer: 'Add a customer', product: 'Add a product', plan: 'Create a plan', quotation: 'Prepare a quotation', quoteTemplate: 'Create quotation template', subscription: 'New subscription', discount: 'Create discount', staff: 'Add verified ORCA account', tax: 'Add tax rule' };
-  const subtitle: Record<typeof kind, string> = { customer: 'Add a customer record to your workspace.', product: 'Set a base price and optional additive variant.', plan: 'Define billing frequency and lifecycle permissions.', quotation: 'Choose a customer and offer, then set validity.', quoteTemplate: 'Save a plan and optional product line to reuse in customer offers.', subscription: 'Create a draft subscription for a customer.', discount: 'Set eligibility, scope, and a usage limit.', staff: 'The teammate must create an ORCA account and verify this email before you can add them.', tax: 'Configure a tax rate for eligible invoice lines.' };
+  const title: Record<typeof kind, string> = { customer: 'Add a customer', product: 'Add a product', plan: 'Create a plan', quotation: 'Prepare a quotation', quoteTemplate: 'Create quotation template', subscription: 'New subscription', discount: 'Create discount', staff: 'Add staff by email', tax: 'Add tax rule' };
+  const subtitle: Record<typeof kind, string> = { customer: 'Add a customer record to your workspace.', product: 'Set a base price and optional additive variant.', plan: 'Define billing frequency and lifecycle permissions.', quotation: 'Choose a customer and offer, then set validity.', quoteTemplate: 'Save a plan and optional product line to reuse in customer offers.', subscription: 'Create a draft subscription for a customer.', discount: 'Set eligibility, scope, and a usage limit.', staff: 'Grant staff access to an existing ORCA account by email.', tax: 'Configure a tax rate for eligible invoice lines.' };
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault(); setBusy(true);
     const saved = await onSave(values);
@@ -156,7 +156,7 @@ function CreateRecordDialog({ kind, data, onClose, onSave }: {
       {kind === 'quoteTemplate' && <div className="form-grid">{text('Template name', 'name', 'text', 'e.g. Business monthly offer')}{select('Billing plan', 'templatePlanId', planOptions)}<SelectField label="Additional product (optional)" name="templateProductId" value={v('templateProductId')} onChange={(value) => { set('templateProductId', value); set('templateProductVariant', ''); }} options={[{ label: 'No additional product', value: '' }, ...data.products.map((product) => ({ label: `${product.name} · ${money(product.price)}`, value: product.id }))]} />{selectedTemplateProduct && templateVariantOptions.length > 0 && <SelectField label="Product variant" name="templateProductVariant" value={v('templateProductVariant')} onChange={(value) => set('templateProductVariant', value)} options={[{ label: 'Base product price', value: '' }, ...templateVariantOptions]} />}{text(`Plan quantity · minimum ${selectedTemplatePlanMinimum}`, 'templateQuantity', 'number', String(selectedTemplatePlanMinimum), true, String(selectedTemplatePlanMinimum), '1')}{text('Offer validity (days)', 'validDays', 'number', '14', true, '1', '1')}</div>}
       {kind === 'subscription' && <div className="form-grid">{select('Customer', 'customerId', customerOptions)}{select('Plan', 'planId', planOptions)}{text(`Quantity · minimum ${selectedPlanMinimum}`, 'quantity', 'number', String(selectedPlanMinimum), true, String(selectedPlanMinimum), '1')}{select('Payment terms', 'paymentTerms', [{ label: 'Due on receipt', value: '0' }, { label: 'Net 15', value: '15' }, { label: 'Net 30', value: '30' }])}{text('Start date', 'availableFrom', 'date')}<SelectField label="Optional product or add-on" name="productId" value={v('productId')} onChange={(value) => { set('productId', value); set('productVariant', ''); }} options={[{ label: 'No additional product', value: '' }, ...addOnOptions]} />{selectedAddOn && <>{variantOptions.length > 0 && <SelectField label="Product variant" name="productVariant" value={v('productVariant')} onChange={(value) => set('productVariant', value)} options={[{ label: 'Base product price', value: '' }, ...variantOptions]} />}{text('Add-on quantity', 'productQuantity', 'number', '1', true, '1', '1')}</>}</div>}
       {kind === 'discount' && <div className="form-grid">{text('Discount name', 'name', 'text', 'Annual commitment')}{select('Discount type', 'discountKind', [{ label: 'Percentage', value: 'Percentage' }, { label: 'Fixed amount', value: 'Fixed' }])}{text(values.discountKind === 'Fixed' ? 'Amount · INR' : 'Percentage off', 'value', 'number', values.discountKind === 'Fixed' ? '1500.00' : '10', true, '0', '0.01')}{select('Applies to', 'scope', [{ label: 'Entire subscription', value: 'Subscriptions' }, ...data.products.map((product) => ({ label: product.name, value: product.id }))])}{text('Minimum purchase · INR', 'minimum', 'number', '0.00', true, '0', '0.01')}{text('Minimum quantity', 'minimumQuantity', 'number', '1', true, '1', '1')}{text('Usage limit', 'usageLimit', 'number', '25', true, '1', '1')}{text('Starts on', 'startsAt', 'date', '', false)}{text('Ends on', 'endsAt', 'date', '', false)}</div>}
-      {kind === 'staff' && <div className="form-grid">{text('Teammate name', 'name', 'text', 'Sam Patel')}{text('Email on the verified ORCA account', 'email', 'email', 'teammate@company.com')}<p className="form-hint">Ask your teammate to create an ORCA account and verify this exact email first. Adding them grants staff access to this workspace.</p></div>}
+      {kind === 'staff' && <div className="form-grid">{text('Email on the ORCA account', 'email', 'email', 'teammate@company.com')}<p className="form-hint">Enter the email used to create their ORCA account. Staff access is granted to this workspace immediately; no invitation email is sent.</p></div>}
       {kind === 'tax' && <div className="form-grid">{text('Tax name', 'name', 'text', 'GST')}{text('Region or treatment', 'region', 'text', 'India · Standard rated')}{text('Rate (%)', 'rate', 'number', '18', true, '0', '0.01')}</div>}
       <FormActions onCancel={onClose} submit={kind === 'staff' ? 'Add staff member' : kind === 'quotation' ? 'Prepare quotation' : kind === 'subscription' ? 'Create draft' : kind === 'quoteTemplate' ? 'Save template' : 'Save'} disabled={busy} />
     </Form>
@@ -236,18 +236,19 @@ function AuthScreen({ apiState, connectionError, initialMode, onModeChange, onBa
       } else {
         const requestBody = mode === 'login' ? { email, password } : mode === 'customer' ? { email, password, businessId: business.trim() } : { email, password, businessName: business.trim() };
         const result = await apiRequest<Record<string, unknown>>(mode === 'login' ? '/auth/login' : '/auth/signup', { method: 'POST', body: JSON.stringify(requestBody) });
-        if (typeof result.csrfToken === 'string') { onAuthenticated(); return; }
+        if (typeof result.csrfToken === 'string') {
+          if (mode === 'signup') { setEmailNotice({ source: 'signup' }); return; }
+          onAuthenticated(); return;
+        }
         if (mode === 'customer') {
           setNotice('If the business has a matching customer record, ORCA will send an email verification link.');
         } else {
-          setNotice(result.emailSent === true
-            ? 'Account created. Open the verification email to finish signing in.'
-            : 'Account created. Email verification must be configured before this account can sign in.');
+          setError('ORCA created the account but did not start a session. Sign in with the password you chose.');
         }
       }
     } catch (reason) {
-      if (reason instanceof ApiError && reason.status === 503 && (mode === 'signup' || mode === 'customer' || mode === 'forgot')) {
-        setEmailNotice({ source: mode === 'signup' ? 'signup' : mode === 'customer' ? 'customer-signup' : 'password-reset' });
+      if (reason instanceof ApiError && reason.status === 503 && (mode === 'customer' || mode === 'forgot')) {
+        setEmailNotice({ source: mode === 'customer' ? 'customer-signup' : 'password-reset' });
         return;
       }
       setError(reason instanceof Error ? reason.message : 'ORCA could not complete this request. Please try again.');
@@ -267,11 +268,16 @@ function AuthScreen({ apiState, connectionError, initialMode, onModeChange, onBa
     setError(''); setNotice(''); setPassword('');
     if (mode !== 'login') setBusiness('');
   };
+  const closeEmailNotice = () => {
+    const continueToWorkspace = emailNotice?.source === 'signup';
+    setEmailNotice(null);
+    if (continueToWorkspace) onAuthenticated();
+  };
 
   return <main className="auth-page">
     <div className="auth-layout">
       <section className="auth-main" aria-labelledby="auth-title">
-        <div className="auth-mobile-brand"><span className="auth-mobile-brand-lockup"><span className="auth-brand-mark"><Icon name="overview" size={20} /></span><span className="auth-brand-name">orca</span></span><button type="button" onClick={switchMode}>{switchLabel}</button></div>
+        <div className="auth-mobile-brand"><img className="orca-logo auth-mobile-logo" src="/assets/orca-logo.png" alt="" aria-hidden="true" /><button type="button" onClick={switchMode}>{switchLabel}</button></div>
         <div className="auth-card">
         <h1 id="auth-title">{title}</h1><p className="auth-description">{description}</p>
         {isLoading && <div className="auth-connection" role="status"><span className="auth-spinner" />Checking your secure workspace connection…</div>}
@@ -298,14 +304,14 @@ function AuthScreen({ apiState, connectionError, initialMode, onModeChange, onBa
       </section>
       <section className="auth-story" aria-label="About ORCA">
         <div className="auth-story-inner">
-          <div className="auth-brand"><span className="auth-brand-mark"><Icon name="overview" size={21} /></span><span className="auth-brand-name">orca</span></div>
+          <div className="auth-brand"><img className="orca-logo auth-story-logo" src="/assets/orca-logo.png" alt="" aria-hidden="true" /></div>
           <div className="auth-story-copy"><h2>Every cycle,<br /><em>accounted for.</em></h2><p>Plans, invoices, and payments in one workspace. Every total keeps its source.</p>
             <div className="auth-story-next"><span>{switchPrompt}</span><button type="button" className="auth-story-switch" onClick={switchMode}>{switchLabel}<Icon name="arrow" size={16} /></button></div>
           </div>
         </div>
       </section>
     </div>
-    {emailNotice && <EmailUnavailableDialog value={emailNotice} onClose={() => setEmailNotice(null)} />}
+    {emailNotice && <EmailUnavailableDialog value={emailNotice} onClose={closeEmailNotice} />}
   </main>;
 }
 
@@ -320,15 +326,16 @@ function EmailUnavailableDialog({ value, onClose }: { value: EmailNotice; onClos
   const detail = value.documentNumber
     ? `No email was sent or queued for ${value.documentNumber}; its status has not changed. You can print the document and share it yourself.`
     : value.source === 'signup'
-      ? 'No account or workspace was created. Email verification is required before a new account can sign in.'
+      ? 'Your workspace is ready. Email verification was skipped in this build, so no message was sent. Email-based password recovery is also unavailable.'
       : value.source === 'customer-signup'
         ? 'No customer access was created. Email verification is required before a portal account can be linked.'
         : value.source === 'password-reset'
           ? 'No reset message was sent. Password recovery is unavailable until email delivery is funded.'
           : 'Invoices, quotations, and customer notifications cannot be sent from ORCA in this build.';
-  return <Dialog title="Email delivery isn't available" description="We didn't have the budget to implement automatic email for this build." onClose={onClose}>
-    <div className="email-unavailable"><span className="email-unavailable-icon"><Icon name="mail" size={18} /></span><div><strong>Nothing was sent</strong><p>{detail}</p></div></div>
-    <div className="form-actions"><Button variant="primary" onClick={onClose}>Got it</Button></div>
+  const workspaceCreated = value.source === 'signup';
+  return <Dialog title={workspaceCreated ? 'Workspace created' : "Email delivery isn't available"} description="We didn't have the budget to implement automatic email for this build." onClose={onClose}>
+    <div className="email-unavailable"><span className="email-unavailable-icon"><Icon name="mail" size={18} /></span><div><strong>{workspaceCreated ? 'Your account is ready' : 'Nothing was sent'}</strong><p>{detail}</p></div></div>
+    <div className="form-actions"><Button variant="primary" onClick={onClose}>{workspaceCreated ? 'Continue to workspace' : 'Got it'}</Button></div>
   </Dialog>;
 }
 
@@ -814,9 +821,9 @@ export default function App() {
       }
       if (kind === 'staff') {
         const email = value('email').trim();
-        const name = value('name').trim() || email;
+        const name = email;
         const staff = { id, name, email, role: 'Staff' as const, status: 'Active', initials: initials(name) };
-        return await commit('/staff', { name, email: staff.email, role: 'staff' }, (response) => patch('staff', (items) => [...items, { ...staff, id: responseId(response, id) }]));
+        return await commit('/staff', { email: staff.email, role: 'staff' }, (response) => patch('staff', (items) => [...items, { ...staff, id: responseId(response, id) }]));
       }
       const rate = value('rate');
       const tax: TaxRule = { id, name: value('name').trim(), region: value('region').trim(), rateBps: percentageBps(rate), active: true };
@@ -979,7 +986,7 @@ export default function App() {
   }
   return <div className={`app-shell ${mobileNavOpen ? 'nav-open' : ''}`}>
     <aside id="orca-sidebar" className="sidebar" ref={sidebarRef} aria-label="Workspace sidebar" aria-hidden={isMobileViewport && !mobileNavOpen}>
-      <button type="button" className="brand-lockup" onClick={() => navigate('overview')} aria-label="ORCA home"><span className="brand-mark"><Icon name="overview" size={19} /></span><span><strong>orca</strong><small>Billing workspace</small></span></button>
+      <button type="button" className="brand-lockup" onClick={() => navigate('overview')} aria-label="ORCA home"><img className="orca-logo app-orca-logo" src="/assets/orca-logo.png" alt="" aria-hidden="true" /><small>Billing workspace</small></button>
       <div className="workspace-switch"><span className="workspace-avatar">{workspaceTitle.slice(0, 1).toUpperCase()}</span><span><strong>{workspaceTitle}</strong><small>Business workspace</small></span><Icon name="chevron" size={15} /></div>
       <div className="side-section-label">WORKSPACE</div>
       <nav className="primary-nav" aria-label="Main navigation">{primaryNav.map((item) => <button key={item.page} type="button" className={`nav-item ${route.page === item.page || (route.page === 'invoice' && item.page === 'invoices') ? 'active-nav' : ''}`} onClick={() => navigate(item.page)}><Icon name={item.icon} size={18} /><span>{pageTitles[item.page]}</span>{item.page === 'invoices' && <span className="nav-count">{data.invoices.filter((invoice) => toPaise(outstanding(invoice)) > 0n).length}</span>}</button>)}</nav>

@@ -7,13 +7,13 @@ import (
 	"time"
 )
 
-func TestInviteStaffAddsVerifiedGlobalUserToOnlyCurrentBusiness(t *testing.T) {
+func TestInviteStaffAddsExistingGlobalUserToOnlyCurrentBusiness(t *testing.T) {
 	api, admin := newAgentToolTestAPI()
-	other := User{ID: "existing-user", Email: "existing@example.test", EmailNormalized: "existing@example.test", Verified: true, CreatedAt: time.Now().UTC()}
+	other := User{ID: "existing-user", Email: "existing@example.test", EmailNormalized: "existing@example.test", Verified: false, CreatedAt: time.Now().UTC()}
 	api.Store.state.Users[other.ID] = other
 	api.Store.state.Memberships[membershipKey("biz-b", other.ID)] = Membership{BusinessID: "biz-b", UserID: other.ID, Role: "admin"}
 
-	request := httptest.NewRequest("POST", "/api/v1/staff/invitations", strings.NewReader(`{"name":"Existing account","email":"existing@example.test","role":"staff"}`))
+	request := httptest.NewRequest("POST", "/api/v1/staff/invitations", strings.NewReader(`{"email":"existing@example.test","role":"staff"}`))
 	response := httptest.NewRecorder()
 	api.inviteStaff(response, request, Authenticated{Actor: admin})
 	if response.Code != 201 {
@@ -34,10 +34,8 @@ func TestInviteStaffAddsVerifiedGlobalUserToOnlyCurrentBusiness(t *testing.T) {
 	}
 }
 
-func TestInviteStaffRejectsUnverifiedGlobalUser(t *testing.T) {
+func TestInviteStaffRequiresAnExistingAccount(t *testing.T) {
 	api, admin := newAgentToolTestAPI()
-	unverified := User{ID: "pending-user", Email: "pending@example.test", EmailNormalized: "pending@example.test"}
-	api.Store.state.Users[unverified.ID] = unverified
 
 	request := httptest.NewRequest("POST", "/api/v1/staff/invitations", strings.NewReader(`{"name":"Pending account","email":"pending@example.test","role":"staff"}`))
 	response := httptest.NewRecorder()
@@ -45,7 +43,7 @@ func TestInviteStaffRejectsUnverifiedGlobalUser(t *testing.T) {
 	if response.Code != 422 {
 		t.Fatalf("inviteStaff status = %d, want 422; body = %s", response.Code, response.Body.String())
 	}
-	if _, ok := api.Store.state.Memberships[membershipKey("biz-a", unverified.ID)]; ok {
-		t.Fatal("unverified account received staff access")
+	if len(api.Store.state.Memberships) != 1 {
+		t.Fatalf("nonexistent account received a membership: %#v", api.Store.state.Memberships)
 	}
 }

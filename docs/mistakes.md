@@ -1,5 +1,13 @@
 # Verified mistakes and prevention
 
+## 2026-10-31 — Missing email configuration blocked workspace signup
+
+- **Observed:** the production signup handler rejected new business workspaces with HTTP 503 when Resend was not configured. That made ordinary login/signup depend on an email service that this build did not fund.
+- **Cause:** one provider-readiness gate ran before the handler distinguished workspace accounts from customer-portal verification.
+- **Correction:** workspace signup now creates an admin membership and secure session without email; the account remains explicitly unverified. Admin/staff sessions work without verification, while customer access still requires verified ownership. The UI retains the no-budget email notice after workspace creation.
+- **Regression evidence:** the production-mode handler test covers workspace signup and login without email, the 503 customer/reset cases, and denial of unverified customer sessions. Full Go tests and frontend typecheck/lint/production build passed.
+- **Prevention:** test provider-off behavior separately for each identity flow. Email availability must gate only workflows that require a delivered message.
+
 ## 2026-10-31 — Sign-in screen was too dense and visually heavy
 
 - **Observed:** owner review rejected the sign-in presentation and supplied a simpler split-card reference.

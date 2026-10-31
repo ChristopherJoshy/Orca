@@ -19,7 +19,7 @@ The ORCA frontend and PostgreSQL-backed Go API are deployed. The frontend is pub
 - Nginx adds `/orca-api/` and `/orca-mcp/` routes inside the existing TLS server block and preserves the root app. The pre-change Nginx file is backed up at `/etc/nginx/backups/typelo-https.conf.orca`.
 - The existing IP-address certificate for `3.110.118.112` covers HTTPS; the existing Certbot renewal timer remains enabled. HTTP and HTTPS ingress were already available, so no AWS security-group change or new public port was needed.
 - PostgreSQL is installed on the VPS. Goose migrations 001–009 applied at startup. The API environment is root-owned with mode `0600` at `/etc/orca/orca.env`; exports use `/var/lib/orca/exports` with private permissions.
-- `GROQ_API_KEY` is configured on the VPS for Copilot. Resend and Stripe keys are not configured, so email delivery and Checkout are inactive. Production signup/reset and send-email APIs refuse requests that cannot complete; the UI explains this in a branded dialog. No production account or sample records were seeded.
+- `GROQ_API_KEY` is configured on the VPS for Copilot. Resend and Stripe keys are not configured, so email delivery and Checkout are inactive. Production workspace signup creates an admin session without email verification and shows the no-budget email notice; customer signup, password reset, and send-email APIs refuse requests that cannot complete, with a branded explanation in the UI. No production account or sample records were seeded.
 
 ## Deployment checks
 
@@ -35,9 +35,9 @@ The ORCA frontend and PostgreSQL-backed Go API are deployed. The frontend is pub
 
 ## Remaining release work
 
-- Configure a verified Resend sender and `RESEND_API_KEY` to enable signup verification, password reset, and invoice/quotation email delivery.
+- Configure a verified Resend sender and `RESEND_API_KEY` to enable customer-portal email verification, password reset, and invoice/quotation delivery. Workspace admin signup and login do not depend on Resend.
 - Configure Stripe test credentials and a webhook signing secret before testing hosted Checkout.
-- Create a real test account through the normal signup flow and run the full business workflow after Resend is configured. Until then, production signup returns 503 without creating an unverified account. No test credentials or business data are committed.
+- Create a real test account through the normal workspace signup flow and run the full business workflow. Signup establishes an admin session without email verification; customer portal linking and password reset remain unavailable until Resend is configured. No test credentials or business data are committed.
 - Configure automated PostgreSQL backups and validate export archive cleanup before relying on the VPS database for real business records.
 - Complete the remaining checks in [testing.md](testing.md) and [requirements.md](requirements.md). This hackathon MVP is hosted but is not production-ready billing software.
 

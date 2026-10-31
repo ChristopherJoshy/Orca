@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-func TestProductionSignupAndPasswordResetDoNotCreateDeadEndRecordsWithoutEmail(t *testing.T) {
+func TestProductionWorkspaceSignupAndLoginWorkWithoutEmail(t *testing.T) {
 	store := &Store{state: NewState()}
 	api := NewAPI(store, ServerConfig{Env: "production", CookieSecure: true, AllowedOrigin: "https://orca.example.test"})
 	signupBody, _ := json.Marshal(map[string]string{"email": "new@example.test", "password": "Password!2026", "businessName": "New Business"})
@@ -19,17 +19,77 @@ func TestProductionSignupAndPasswordResetDoNotCreateDeadEndRecordsWithoutEmail(t
 	signup.RemoteAddr = "127.0.0.1:1234"
 	signupRec := httptest.NewRecorder()
 	api.ServeHTTP(signupRec, signup)
-	if signupRec.Code != http.StatusServiceUnavailable || !strings.Contains(signupRec.Body.String(), "email delivery is not configured") {
+	if signupRec.Code != http.StatusCreated {
 		t.Fatalf("production signup returned %d: %s", signupRec.Code, signupRec.Body.String())
 	}
+	var signupResponse map[string]any
+	if err := json.Unmarshal(signupRec.Body.Bytes(), &signupResponse); err != nil {
+		t.Fatal(err)
+	}
+	createdUser, ok := signupResponse["user"].(map[string]any)
+	if !ok || createdUser["verified"] != false || signupResponse["emailVerificationRequired"] != false {
+		t.Fatalf("signup did not report an unverified but usable account: %#v", signupResponse)
+	}
+	csrf, ok := signupResponse["csrfToken"].(string)
+	if !ok || csrf == "" {
+		t.Fatalf("signup did not establish a CSRF-protected session: %#v", signupResponse)
+	}
+	if cookies := signupRec.Result().Cookies(); len(cookies) != 1 || cookies[0].Name != "orca_session" || cookies[0].Value == "" {
+		t.Fatalf("signup did not establish a session cookie: %#v", cookies)
+	}
+
+	loginBody, _ := json.Marshal(map[string]string{"email": "new@example.test", "password": "Password!2026"})
+	login := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(string(loginBody)))
+	login.RemoteAddr = "127.0.0.1:1234"
+	loginRec := httptest.NewRecorder()
+	api.ServeHTTP(loginRec, login)
+	if loginRec.Code != http.StatusOK {
+		t.Fatalf("login for a new workspace account returned %d: %s", loginRec.Code, loginRec.Body.String())
+	}
+	if cookies := loginRec.Result().Cookies(); len(cookies) != 1 || cookies[0].Name != "orca_session" || cookies[0].Value == "" {
+		t.Fatalf("login did not establish a session cookie: %#v", cookies)
+	}
+
+	customerSignup := httptest.NewRequest(http.MethodPost, "/api/v1/auth/signup", strings.NewReader(`{"email":"customer@example.test","password":"Password!2026","businessId":"00000000-0000-4000-8000-000000000001"}`))
+	customerSignup.RemoteAddr = "127.0.0.1:1234"
+	customerSignupRec := httptest.NewRecorder()
+	api.ServeHTTP(customerSignupRec, customerSignup)
+	if customerSignupRec.Code != http.StatusServiceUnavailable || !strings.Contains(customerSignupRec.Body.String(), "email delivery is not configured") {
+		t.Fatalf("customer signup returned %d: %s", customerSignupRec.Code, customerSignupRec.Body.String())
+	}
+
 	reset := httptest.NewRequest(http.MethodPost, "/api/v1/auth/password-reset", strings.NewReader(`{"email":"new@example.test"}`))
 	resetRec := httptest.NewRecorder()
 	api.ServeHTTP(resetRec, reset)
 	if resetRec.Code != http.StatusServiceUnavailable || !strings.Contains(resetRec.Body.String(), "email delivery is not configured") {
 		t.Fatalf("password reset returned %d: %s", resetRec.Code, resetRec.Body.String())
 	}
-	if len(store.state.Users) != 0 || len(store.state.Businesses) != 0 || len(store.state.EmailVerifications) != 0 || len(store.state.ResetTokens) != 0 {
-		t.Fatalf("unavailable email flows left unusable records: users=%#v businesses=%#v verification=%#v reset=%#v", store.state.Users, store.state.Businesses, store.state.EmailVerifications, store.state.ResetTokens)
+	if len(store.state.Users) != 1 || len(store.state.Businesses) != 1 || len(store.state.EmailVerifications) != 0 || len(store.state.ResetTokens) != 0 {
+		t.Fatalf("workspace signup or email-dependent flows left unexpected records: users=%#v businesses=%#v verification=%#v reset=%#v", store.state.Users, store.state.Businesses, store.state.EmailVerifications, store.state.ResetTokens)
+	}
+}
+
+func TestUnverifiedCustomerMembershipCannotLoginWithoutEmailProof(t *testing.T) {
+	store := &Store{state: NewState()}
+	password, err := passwordHash("Password!2026")
+	if err != nil {
+		t.Fatal(err)
+	}
+	user := User{ID: "customer-user", Email: "customer@example.test", EmailNormalized: "customer@example.test", PasswordHash: password}
+	business := Business{ID: "business-a", Name: "Business A", Currency: CurrencyINR, Timezone: "Asia/Kolkata"}
+	store.state.Users[user.ID] = user
+	store.state.Businesses[business.ID] = business
+	store.state.Memberships[membershipKey(business.ID, user.ID)] = Membership{BusinessID: business.ID, UserID: user.ID, CustomerID: "customer-a", Role: "customer"}
+	api := NewAPI(store, ServerConfig{Env: "production", CookieSecure: true, AllowedOrigin: "https://orca.example.test"})
+	body, _ := json.Marshal(map[string]string{"email": user.Email, "password": "Password!2026"})
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(string(body)))
+	rec := httptest.NewRecorder()
+	api.ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden || !strings.Contains(rec.Body.String(), "Email verification is required") {
+		t.Fatalf("unverified customer login returned %d: %s", rec.Code, rec.Body.String())
+	}
+	if len(store.state.Sessions) != 0 {
+		t.Fatalf("unverified customer login created a session: %#v", store.state.Sessions)
 	}
 }
 

@@ -106,9 +106,9 @@ The Copilot screen above is the built-in assistant. External MCP clients use the
       <sub><strong>Taxes.</strong> The calculation order is fixed: each line applies its eligible discount first, calculates tax on the reduced amount, then rounds tax half-up per line.</sub>
     </td>
     <td width="50%" valign="top">
-      <a href="assets/screenshots/team.webp"><img src="assets/screenshots/team.webp" alt="ORCA team members page with admin-only access notice, roles, account status, and verified accounts" width="100%" /></a>
+      <a href="assets/screenshots/team.webp"><img src="assets/screenshots/team.webp" alt="ORCA team members page with admin-only access notice, roles, and account status" width="100%" /></a>
       <br />
-      <sub><strong>Team members.</strong> Admin-only staff access for verified ORCA accounts. Customer portal access stays separate from employee access, and no invitation email is implied.</sub>
+      <sub><strong>Team members.</strong> Admin-only staff access for existing ORCA accounts. Customer portal access stays separate from employee access, and no invitation email is implied.</sub>
     </td>
   </tr>
 </table>

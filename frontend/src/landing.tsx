@@ -9,8 +9,7 @@ export function LandingPage({ onSignIn, onCreateWorkspace }: LandingPageProps) {
   return <main className="landing-page">
     <header className="landing-header">
       <a className="landing-brand" href="/" aria-label="ORCA home">
-        <span className="landing-brand-mark" aria-hidden="true"><span /><span /><span /></span>
-        <span>orca</span>
+        <img className="orca-logo landing-orca-logo" src="/assets/orca-logo.png" alt="" aria-hidden="true" />
       </a>
       <nav className="landing-nav" aria-label="Main navigation">
         <a href="#product">Product</a><a href="#integrity">Billing integrity</a><a href="#copilot">Copilot</a>
@@ -74,6 +73,6 @@ export function LandingPage({ onSignIn, onCreateWorkspace }: LandingPageProps) {
       </div>
     </section>
 
-    <footer className="landing-footer"><a className="landing-brand" href="/" aria-label="ORCA home"><span className="landing-brand-mark" aria-hidden="true"><span /><span /><span /></span><span>orca</span></a><span>Subscription management with reliable billing.</span><button type="button" onClick={onSignIn}>Sign in <Icon name="arrow" size={13} /></button></footer>
+    <footer className="landing-footer"><a className="landing-brand" href="/" aria-label="ORCA home"><img className="orca-logo landing-orca-logo" src="/assets/orca-logo.png" alt="" aria-hidden="true" /></a><span>Subscription management with reliable billing.</span><button type="button" onClick={onSignIn}>Sign in <Icon name="arrow" size={13} /></button></footer>
   </main>;
 }

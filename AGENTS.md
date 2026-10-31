@@ -38,6 +38,8 @@ ORCA is a subscription and recurring-billing platform. Read [the documentation i
 - Do not ship demo mode, sample workspace records, local-storage business data, or offline fallbacks. If the API is unavailable or the user is signed out, show an honest connection or authentication screen and do not imply that unsaved data belongs to a real workspace.
 - Verify end-to-end flows using a real account created through the normal signup/login API and records stored under that account's business. Keep test credentials out of Git and application defaults.
 - Keep the built-in Copilot visible in primary navigation. Put external MCP connection status, OAuth discovery/setup instructions, scopes, and revocation in Settings. Keep team-member creation discoverable and enforce admin-only access in the API.
+- Use `frontend/public/assets/orca-logo.png` as ORCA's only official logo. Do not create substitute marks or add unrelated customer/company logos to product surfaces.
+- Grant staff access by entering the teammate's existing ORCA account email. Ask only for email; do not require a name or imply that an invitation email was sent.
 - For each reviewable feature batch, verify the changed application, add a consecutively numbered detailed record under `commits/`, and create a Conventional Commit whose body references that record. Push completed commits consistently to the configured competition remote after checks pass; never push failing changes or secrets. Do not guess a remote URL or deploy during local implementation; deploy only in an owner-requested hosting phase with the exact target and required credentials available.
 
 ## Verification commands

@@ -289,11 +289,11 @@ func (a *API) signup(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
-	if a.Config.Env != "development" && !a.emailDeliveryConfigured() {
-		writeErr(w, ErrEmailDeliveryUnavailable)
-		return
-	}
 	if strings.TrimSpace(input.BusinessID) != "" {
+		if a.Config.Env != "development" && !a.emailDeliveryConfigured() {
+			writeErr(w, ErrEmailDeliveryUnavailable)
+			return
+		}
 		a.signupCustomer(w, r, input.Email, input.Password, strings.TrimSpace(input.BusinessID))
 		return
 	}
@@ -327,51 +327,24 @@ func (a *API) signup(w http.ResponseWriter, r *http.Request) {
 	}
 	now := time.Now().UTC()
 	user := User{ID: uid, Email: strings.TrimSpace(input.Email), EmailNormalized: normalized, PasswordHash: hash, Verified: a.Config.Env == "development", CreatedAt: now}
-	verificationToken, verificationHash := "", ""
-	if !user.Verified {
-		verificationToken, err = randomToken(32)
-		if err != nil {
-			writeErr(w, err)
-			return
-		}
-		verificationHash = tokenDigest(verificationToken)
-	}
 	business := Business{ID: bid, Name: strings.TrimSpace(input.BusinessName), Currency: CurrencyINR, Timezone: "Asia/Kolkata", NextInvoiceNumber: 1}
-	if err := a.Store.Update(r.Context(), func(st *State) error {
-		for _, u := range st.Users {
-			if u.EmailNormalized == normalized {
-				return ErrConflict
-			}
-		}
-		st.Users[user.ID] = user
-		st.Businesses[business.ID] = business
-		st.Memberships[membershipKey(business.ID, user.ID)] = Membership{BusinessID: business.ID, UserID: user.ID, Role: "admin"}
-		if !user.Verified {
-			st.EmailVerifications[verificationHash] = AuthToken{UserID: user.ID, ExpiresAt: now.Add(24 * time.Hour)}
-		}
-		return nil
-	}); err != nil {
-		writeErr(w, err)
-		return
-	}
-	if !user.Verified {
-		delivered := false
-		if a.Config.ResendAPIKey != "" {
-			link := strings.TrimRight(a.Config.PublicURL, "/") + "/?verify=" + url.QueryEscape(verificationToken)
-			body := "<p>Verify your ORCA email address:</p><p><a href=\"" + html.EscapeString(link) + "\">Verify email</a></p>"
-			delivered = a.sendResendEmail(r.Context(), user.Email, "Verify your ORCA account", body, "orca-verify:"+verificationHash) == nil
-		}
-		writeJSON(w, 201, map[string]any{"user": map[string]any{"id": user.ID, "email": user.Email, "verified": false}, "verificationRequired": true, "emailSent": delivered})
-		return
-	}
-	member := Membership{BusinessID: business.ID, UserID: user.ID, Role: "admin"}
-	token, csrf, session, err := a.issueSession(r.Context(), user, business, member)
+	token, err := randomToken(32)
 	if err != nil {
 		writeErr(w, err)
 		return
 	}
+	csrf, err := randomToken(32)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	session := Session{UserID: user.ID, BusinessID: business.ID, Role: "admin", CSRFToken: tokenDigest(csrf), CreatedAt: now, LastSeenAt: now, ExpiresAt: now.Add(7 * 24 * time.Hour)}
+	if err := a.Store.CreateAccount(r.Context(), user, business, session, tokenDigest(token)); err != nil {
+		writeErr(w, err)
+		return
+	}
 	a.setSession(w, token, session.ExpiresAt)
-	writeJSON(w, 201, map[string]any{"user": map[string]any{"id": user.ID, "email": user.Email, "verified": user.Verified}, "business": business, "csrfToken": csrf, "autoVerified": true})
+	writeJSON(w, 201, map[string]any{"user": map[string]any{"id": user.ID, "email": user.Email, "verified": user.Verified}, "business": business, "csrfToken": csrf, "emailVerificationRequired": false})
 }
 func (a *API) login(w http.ResponseWriter, r *http.Request) {
 	if !a.rateLimit(r, "login") {
@@ -397,10 +370,6 @@ func (a *API) login(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, ErrUnauthorized)
 		return
 	}
-	if !user.Verified {
-		writeJSON(w, 403, apiError{Message: "Verify your email before signing in"})
-		return
-	}
 	member := members[0]
 	if input.BusinessID != "" {
 		found := false
@@ -415,6 +384,10 @@ func (a *API) login(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, ErrForbidden)
 			return
 		}
+	}
+	if !user.Verified && member.Role != "admin" && member.Role != "staff" {
+		writeJSON(w, 403, apiError{Message: "Email verification is required for customer portal access"})
+		return
 	}
 	var business Business
 	err = a.Store.ReadFor(r.Context(), member.BusinessID, func(st *State) error {

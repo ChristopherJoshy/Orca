@@ -1,5 +1,14 @@
 # Change history and verification
 
+## 2026-10-31 — Let workspace accounts start without email delivery
+
+- Removed the email-provider gate from business workspace signup. Signup now atomically creates the admin account, business membership, and authenticated session; production accounts accurately remain `verified: false`. The branded post-signup notice still explains that automatic email was not funded, then continues into the workspace.
+- Admin/staff sign-in no longer depends on email verification. Customer portal linking remains verified-email-only; password reset and document delivery remain unavailable without Resend and create no dead-end records.
+- Admins can grant Staff membership by entering only the email of an existing ORCA account. No invite email is claimed or sent. Updated UI/API/security documentation to make the scope explicit.
+- Applied the owner-supplied ORCA logo across the public home, authentication, and workspace shell. Removed the invented README brand mark and documented the logo as the only official ORCA logo.
+- **Verification:** `GOCACHE=/tmp/orca-go-cache go test ./...` passed. Frontend `npm run typecheck`, `npm run lint`, and production `npm run build` passed with `ORCA_PUBLIC_URL=https://orca-orcin.vercel.app` and `VERCEL_ENV=production`. OpenAPI YAML parsing and `git diff --check` passed.
+- **Deployment status:** implementation is locally verified; the hosted Vercel/VPS release and real account-backed workflow have not yet been checked for this change.
+
 ## 2026-10-31 — Improve landing-page type scale and responsive layout
 
 - Increased the public home's heading, body, card, navigation, and workflow text sizes and widened the content frame to reduce excessive margins on large displays.

@@ -374,7 +374,7 @@ export function useWorkspace() {
     } catch (error) {
       const staffNeedsAccount = path === '/staff' && error instanceof ApiError && /create and verify an account/i.test(error.message);
       notify(staffNeedsAccount
-        ? 'This teammate needs a verified ORCA account first. Ask them to create an account and verify this exact email, then add them here.'
+        ? 'This teammate needs an ORCA account first. Ask them to create an account with this email, then add them here.'
         : error instanceof ApiError ? `Not saved: ${error.message}` : 'Not saved. Check the API connection and try again.');
       return false;
     }

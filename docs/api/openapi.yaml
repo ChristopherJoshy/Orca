@@ -17,7 +17,8 @@ paths:
   /auth/signup:
     post:
       security: []
-      summary: Create a business admin account or a customer portal account
+      summary: Create an immediately usable workspace admin account or a customer portal account
+      description: Workspace signup establishes a session without email verification. Customer portal signup still requires email verification to prove customer ownership.
       requestBody:
         required: true
         content:
@@ -33,15 +34,16 @@ paths:
                 businessName: { type: string, minLength: 1 }
                 businessId: { type: string, format: uuid, description: Selects an existing business customer record matching this email. }
       responses:
-        '201': { description: Business or local-development account created }
+        '201': { description: Workspace admin account and authenticated session created; user.verified reflects whether the email address was independently verified }
         '202': { description: Customer access request accepted; verification may be required }
         '409': { $ref: '#/components/responses/Conflict' }
-        '503': { description: Email verification is unavailable; no account was created }
+        '503': { description: Customer email verification is unavailable; no customer account was created }
         '422': { $ref: '#/components/responses/ValidationError' }
   /auth/login:
     post:
       security: []
-      summary: Start a server-side session
+      summary: Start a server-side session for an admin/staff membership, or verified customer membership
+      description: Email verification is not required for workspace admins or staff. Customer memberships still require a verified email address.
       responses:
         '200': { description: Session established with secure cookie }
         '401': { $ref: '#/components/responses/Unauthorized' }
@@ -423,14 +425,40 @@ paths:
       responses:
         '200': { description: Staff collection }
     post:
-      summary: Add an existing verified ORCA account as staff
+      summary: Add an existing ORCA account as staff
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string, format: email, description: Email on the existing ORCA account to grant staff access to in this workspace. }
+                role: { type: string, enum: [staff], default: staff }
       responses:
         '201': { description: Staff membership created; no invitation email is sent }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
   /staff/invitations:
     post:
-      summary: Add an existing verified ORCA account as staff
+      summary: Add an existing ORCA account as staff
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string, format: email, description: Email on the existing ORCA account to grant staff access to in this workspace. }
+                role: { type: string, enum: [staff], default: staff }
       responses:
         '201': { description: Staff membership created; no invitation email is sent }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
   /reports/summary:
     get:
       summary: Business finance and integrity aggregates
