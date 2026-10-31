@@ -1,5 +1,13 @@
 # Change history and verification
 
+## 2026-10-31 — Honest email limits and production signup guard
+
+- Added an ORCA-styled dialog for invoice and quotation send actions, signup, customer access, password reset, and provider settings when email is unavailable. It explains that this build did not fund automatic email and confirms that nothing was sent or queued and no document/account state changed.
+- Added backend configuration checks for signup, customer signup, password reset, invoice/quotation sends, and Copilot email proposals/approvals. Without both Resend credentials and a sender, production requests return 503 before creating an unusable account, token, document transition, approval, or outbox event.
+- Updated README, OpenAPI, integration, agent, deployment, and acceptance documentation to reflect actual behavior.
+- **Verification:** `ORCA_PUBLIC_URL=https://orca-orcin.vercel.app VERCEL_ENV=production make verify` passed (Go tests, race detector, `go vet`, frontend typecheck/lint, and production build). OpenAPI YAML parsing and `git diff --check` passed. Production API signup, database non-mutation, and final hosted deployment are pending this change's release check.
+- **Known limit:** signup, customer portal linking, and password recovery need a configured verified sender. No test account was created in production without a deliverable verification link.
+
 ## 2026-10-31 — Requirements, application foundation, and local workflow
 
 - Added the contributor guide, product contracts, API outline, local setup, and acceptance matrix before implementing the app.

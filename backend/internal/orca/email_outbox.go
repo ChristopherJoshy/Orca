@@ -15,6 +15,10 @@ import (
 
 const emailOutboxBatchSize = 50
 
+func (a *API) emailDeliveryConfigured() bool {
+	return a != nil && strings.TrimSpace(a.Config.ResendAPIKey) != "" && strings.TrimSpace(a.Config.EmailFrom) != ""
+}
+
 type emailOutboxLine struct {
 	Description string
 	Quantity    int

@@ -118,6 +118,9 @@ func (a *API) decideApproval(w http.ResponseWriter, r *http.Request, auth Authen
 		if req.Decision != "approve" && req.Decision != "reject" {
 			return fmt.Errorf("%w: decision must be approve or reject", ErrValidation)
 		}
+		if req.Decision == "approve" && v.Action == "send_invoice" && !a.emailDeliveryConfigured() {
+			return ErrEmailDeliveryUnavailable
+		}
 		now := time.Now().UTC()
 		var executionResult map[string]any
 		if req.Decision == "approve" {

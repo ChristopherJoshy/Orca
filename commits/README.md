@@ -24,3 +24,4 @@ Each implementation commit has a consecutively numbered Markdown record. The com
 - [0020 — Fix Vercel MCP cache-header routing](0020-vercel-mcp-cache-header.md)
 - [0020 — Visual README and full screenshot gallery](0020-readme-visual-tour.md)
 - [0021 — Deploy the Vercel frontend and VPS API](0021-vercel-vps-deployment.md)
+- [0022 — Fail closed when email delivery is unavailable](0022-email-provider-gates.md)

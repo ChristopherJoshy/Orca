@@ -36,6 +36,7 @@ paths:
         '201': { description: Business or local-development account created }
         '202': { description: Customer access request accepted; verification may be required }
         '409': { $ref: '#/components/responses/Conflict' }
+        '503': { description: Email verification is unavailable; no account was created }
         '422': { $ref: '#/components/responses/ValidationError' }
   /auth/login:
     post:
@@ -62,6 +63,7 @@ paths:
       summary: Request a password-reset email without revealing account existence
       responses:
         '202': { description: Request accepted }
+        '503': { description: Email provider is not configured }
   /auth/password-reset/complete:
     post:
       security: []
@@ -270,10 +272,11 @@ paths:
         '422': { $ref: '#/components/responses/ValidationError' }
   /quotations/{id}/send:
     post:
-      summary: Queue a quotation email request
+      summary: Send a quotation when email delivery is configured
       parameters: [{ $ref: '#/components/parameters/Id' }]
       responses:
         '202': { description: Email request queued to the outbox }
+        '503': { description: Email provider is not configured; the quotation remains unchanged }
   /quotations/{id}/accept:
     post:
       summary: Accept a sent quotation as its linked customer
@@ -346,10 +349,11 @@ paths:
         '409': { $ref: '#/components/responses/Conflict' }
   /invoices/{id}/send:
     post:
-      summary: Queue an invoice email request
+      summary: Send an invoice when email delivery is configured
       parameters: [{ $ref: '#/components/parameters/Id' }]
       responses:
         '202': { description: Email request queued to the outbox }
+        '503': { description: Email provider is not configured; the invoice remains unchanged }
   /invoices/{id}/payments:
     post:
       summary: Record and allocate a manual payment (approval policy applies)

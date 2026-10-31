@@ -14,6 +14,7 @@ import (
 )
 
 var ErrProviderUnavailable = errors.New("provider is not configured")
+var ErrEmailDeliveryUnavailable = errors.New("email delivery is not configured for this build")
 
 func (a *API) sendResendEmail(ctx context.Context, to, subject, htmlBody, idempotencyKey string) error {
 	if strings.TrimSpace(a.Config.ResendAPIKey) == "" {

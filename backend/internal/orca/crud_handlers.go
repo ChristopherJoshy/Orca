@@ -581,6 +581,10 @@ func (a *API) sendQuotation(w http.ResponseWriter, r *http.Request, auth Authent
 		writeErr(w, err)
 		return
 	}
+	if !a.emailDeliveryConfigured() {
+		writeErr(w, ErrEmailDeliveryUnavailable)
+		return
+	}
 	id := chi.URLParam(r, "id")
 	var quote Quotation
 	err := a.Store.UpdateFor(r.Context(), auth.Actor.BusinessID, func(st *State) error {

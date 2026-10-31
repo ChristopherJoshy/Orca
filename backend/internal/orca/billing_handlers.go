@@ -570,6 +570,10 @@ func (a *API) sendInvoice(w http.ResponseWriter, r *http.Request, auth Authentic
 		writeErr(w, err)
 		return
 	}
+	if !a.emailDeliveryConfigured() {
+		writeErr(w, ErrEmailDeliveryUnavailable)
+		return
+	}
 	id := chi.URLParam(r, "id")
 	var v Invoice
 	err := a.Store.UpdateFor(r.Context(), auth.Actor.BusinessID, func(st *State) error {

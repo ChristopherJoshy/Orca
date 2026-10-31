@@ -30,7 +30,7 @@
 
 > [!IMPORTANT]
 > **Open ORCA:** [orca-orcin.vercel.app](https://orca-orcin.vercel.app). The Vercel frontend and VPS API are live; [the API health route](https://orca-orcin.vercel.app/api/v1/health) returns the PostgreSQL-backed service status.
-> ORCA is a hackathon MVP, not production billing software. Resend email delivery and Stripe Checkout are not configured, and several acceptance checks remain open. See the [acceptance matrix](docs/requirements.md).
+> ORCA is a hackathon MVP, not production billing software. We didn't have the budget to fund an email provider for this build; email-dependent actions show a clear explanation and write no unusable records. Stripe Checkout is not configured, and several acceptance checks remain open. See the [acceptance matrix](docs/requirements.md).
 
 ## The question behind ORCA
 

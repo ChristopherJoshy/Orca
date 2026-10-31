@@ -29,6 +29,7 @@ type ChatMessage = { id: string; role: 'user' | 'assistant'; text: string; time:
 type CreateKind = 'customer' | 'product' | 'plan' | 'quotation' | 'quoteTemplate' | 'subscription' | 'discount' | 'staff' | 'tax';
 type CatalogEditTarget = { kind: 'product'; record: Product } | { kind: 'plan'; record: Plan };
 type CatalogArchiveTarget = { kind: 'product'; record: Product } | { kind: 'plan'; record: Plan };
+type EmailNotice = { source: 'invoice' | 'quotation' | 'settings' | 'signup' | 'customer-signup' | 'password-reset'; documentNumber?: string };
 
 function routeFromLocation(): Route {
   const path = window.location.pathname.replace(/\/$/, '') || '/';
@@ -176,6 +177,7 @@ function AuthScreen({ apiState, connectionError, onRetry, onAuthenticated }: { a
   const [resetToken, setResetToken] = useState('');
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [emailNotice, setEmailNotice] = useState<EmailNotice | null>(null);
   const [busy, setBusy] = useState(false);
   const queryTokenHandled = useRef(false);
 
@@ -228,6 +230,10 @@ function AuthScreen({ apiState, connectionError, onRetry, onAuthenticated }: { a
         }
       }
     } catch (reason) {
+      if (reason instanceof ApiError && reason.status === 503 && (mode === 'signup' || mode === 'customer' || mode === 'forgot')) {
+        setEmailNotice({ source: mode === 'signup' ? 'signup' : mode === 'customer' ? 'customer-signup' : 'password-reset' });
+        return;
+      }
       setError(reason instanceof Error ? reason.message : 'ORCA could not complete this request. Please try again.');
     } finally {
       setBusy(false);
@@ -274,6 +280,7 @@ function AuthScreen({ apiState, connectionError, onRetry, onAuthenticated }: { a
         </div>
       </div>
     </section>
+    {emailNotice && <EmailUnavailableDialog value={emailNotice} onClose={() => setEmailNotice(null)} />}
   </main>;
 }
 
@@ -281,6 +288,22 @@ function ReviewDialog({ value, onClose }: { value: { title: string; description:
   const [busy, setBusy] = useState(false);
   return <Dialog title={value.title} description="Review the exact target and effect before this action is submitted." onClose={busy ? () => undefined : onClose}>
     <div className="review-summary"><span>Action</span><strong>{value.description}</strong><span>Target</span><strong>{value.target}</strong></div><div className="review-lock"><Icon name="shield" size={17} /><span>This review is recorded in ORCA. The server rechecks your access and the current record before applying it.</span></div><div className="form-actions"><Button variant="outline" onClick={onClose} disabled={busy}>Back</Button><Button variant="primary" icon="check" disabled={busy} onClick={async () => { setBusy(true); const done = await value.onApprove(); setBusy(false); if (done) onClose(); }}>{busy ? 'Submitting…' : value.actionLabel}</Button></div>
+  </Dialog>;
+}
+
+function EmailUnavailableDialog({ value, onClose }: { value: EmailNotice; onClose: () => void }) {
+  const detail = value.documentNumber
+    ? `No email was sent or queued for ${value.documentNumber}; its status has not changed. You can print the document and share it yourself.`
+    : value.source === 'signup'
+      ? 'No account or workspace was created. Email verification is required before a new account can sign in.'
+      : value.source === 'customer-signup'
+        ? 'No customer access was created. Email verification is required before a portal account can be linked.'
+        : value.source === 'password-reset'
+          ? 'No reset message was sent. Password recovery is unavailable until email delivery is funded.'
+          : 'Invoices, quotations, and customer notifications cannot be sent from ORCA in this build.';
+  return <Dialog title="Email delivery isn't available" description="We didn't have the budget to implement automatic email for this build." onClose={onClose}>
+    <div className="email-unavailable"><span className="email-unavailable-icon"><Icon name="mail" size={18} /></span><div><strong>Nothing was sent</strong><p>{detail}</p></div></div>
+    <div className="form-actions"><Button variant="primary" onClick={onClose}>Got it</Button></div>
   </Dialog>;
 }
 
@@ -400,6 +423,7 @@ export default function App() {
   const [catalogEdit, setCatalogEdit] = useState<CatalogEditTarget | null>(null);
   const [catalogArchive, setCatalogArchive] = useState<CatalogArchiveTarget | null>(null);
   const [paymentInvoice, setPaymentInvoice] = useState<Invoice | null>(null);
+  const [emailNotice, setEmailNotice] = useState<EmailNotice | null>(null);
   const [profile, setProfile] = useState<{ name: string; email: string; role: string; businessName: string }>({ name: '', email: '', role: 'unknown', businessName: '' });
   const [review, setReview] = useState<{ title: string; description: string; target: string; actionLabel: string; onApprove: () => Promise<boolean> } | null>(null);
   const [copilotBusy, setCopilotBusy] = useState(false);
@@ -523,10 +547,7 @@ export default function App() {
 
   const confirmInvoice = (invoice: Invoice) => openReview('Confirm invoice', `Finalize ${invoice.number} for ${money(invoice.total)}. This posts the invoice to the ledger.`, invoice.number, 'Confirm invoice', () => commit(`/invoices/${encodeURIComponent(invoice.id)}/confirm`, {}, () => patch('invoices', (items) => items.map((item) => item.id === invoice.id ? { ...item, status: 'Confirmed' } : item))));
   const cancelInvoice = (invoice: Invoice) => openReview('Cancel invoice', `Cancel ${invoice.number} and preserve its original calculation evidence.`, invoice.number, 'Cancel invoice', () => commit(`/invoices/${encodeURIComponent(invoice.id)}/cancel`, {}, () => patch('invoices', (items) => items.map((item) => item.id === invoice.id ? { ...item, status: 'Cancelled' } : item))));
-  const sendInvoice = (invoice: Invoice) => {
-    const customer = data.customers.find((item) => item.id === invoice.customerId);
-    openReview('Queue invoice email', `Queue ${invoice.number} delivery to ${customer?.name ?? 'the customer'} at ${customer?.email ?? 'their account email'}. This records a delivery request; email delivery is not confirmed here.`, invoice.number, 'Queue email request', () => commit(`/invoices/${encodeURIComponent(invoice.id)}/send`, {}, () => undefined));
-  };
+  const sendInvoice = (invoice: Invoice) => setEmailNotice({ source: 'invoice', documentNumber: invoice.number });
   const openPayment = (invoice: Invoice) => setPaymentInvoice(invoice);
   const payOnline = async (invoice: Invoice) => {
     if (apiState !== 'online' || dataMode !== 'workspace' || profile.role !== 'customer') {
@@ -882,10 +903,10 @@ export default function App() {
     editPlan: (plan) => setCatalogEdit({ kind: 'plan', record: plan }),
     archivePlan: (plan) => setCatalogArchive({ kind: 'plan', record: plan }),
     sendQuotation: (id: string) => {
-      const quote = data.quotations.find((item) => item.id === id); if (!quote) return;
-      const customer = data.customers.find((item) => item.id === quote.customerId);
-      openReview('Queue quotation email', `Queue ${quote.number} delivery to ${customer?.email ?? 'the customer email on file'}. This records a delivery request; email delivery is not confirmed here.`, quote.number, 'Queue email request', () => commit(`/quotations/${encodeURIComponent(id)}/send`, {}, () => patch('quotations', (items) => items.map((item) => item.id === id ? { ...item, status: 'Sent' } : item))));
+      const quote = data.quotations.find((item) => item.id === id);
+      if (quote) setEmailNotice({ source: 'quotation', documentNumber: quote.number });
     },
+    showEmailNotice: () => setEmailNotice({ source: 'settings' }),
   };
 
   const isCustomer = dataMode === 'workspace' && profile.role === 'customer';
@@ -950,6 +971,7 @@ export default function App() {
     {catalogArchive && <CatalogArchiveDialog key={`${catalogArchive.kind}-${catalogArchive.record.id}`} target={catalogArchive} onClose={() => setCatalogArchive(null)} onArchive={() => archiveCatalogRecord(catalogArchive)} />}
     {paymentInvoice && <PaymentDialog invoice={paymentInvoice} customer={data.customers.find((customer) => customer.id === paymentInvoice.customerId)?.company ?? 'Customer'} onClose={() => setPaymentInvoice(null)} onSave={(values) => savePayment(paymentInvoice, values)} />}
     {review && <ReviewDialog value={review} onClose={() => setReview(null)} />}
+    {emailNotice && <EmailUnavailableDialog value={emailNotice} onClose={() => setEmailNotice(null)} />}
     {toast && <div className={`toast ${toastIsError ? 'toast-error' : ''}`} role={toastIsError ? 'alert' : 'status'}><Icon name={toastIsError ? 'close' : 'check'} size={16} />{toast}</div>}
   </div>;
 }

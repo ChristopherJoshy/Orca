@@ -715,6 +715,9 @@ func (a *API) createAgentApproval(ctx context.Context, actor Actor, args actionR
 	if err := requireStaff(Authenticated{Actor: actor}); err != nil {
 		return "", nil, err
 	}
+	if args.Action == "send_invoice" && !a.emailDeliveryConfigured() {
+		return "", nil, ErrEmailDeliveryUnavailable
+	}
 	id, err := newUUID()
 	if err != nil {
 		return "", nil, err

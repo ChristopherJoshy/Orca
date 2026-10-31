@@ -1,5 +1,12 @@
 # Verified mistakes and prevention
 
+## 2026-10-31 — Email actions appeared usable without a delivery provider
+
+- **Observed:** document send controls and agent flows could reach outbox behavior even though this deployment has no Resend provider. Signup and reset also depend on email verification.
+- **Cause:** provider absence was handled by a dormant worker rather than treated as a precondition at every email-producing API boundary, and the interface did not make the limitation clear.
+- **Correction:** email-dependent APIs now reject before writes unless both provider credentials and a sender are configured. The UI shows an ORCA-styled explanation; tests assert no account, business, token, document mutation, approval, or outbox record is left behind.
+- **Prevention:** keep provider readiness checks at API entry points, document unavailable behavior in the OpenAPI contract, and test the no-provider path alongside successful fake-provider behavior.
+
 ## 2026-10-31 — Product variant labels were confused with submitted values
 
 - **Observed:** the new quote/subscription form displayed a combined variant label such as `Brand · Odoo` and used that display text as the value sent to the API. The server accepts only a catalog variant name or value, so products with distinct name/value fields would be rejected.

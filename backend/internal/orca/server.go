@@ -175,6 +175,8 @@ func writeErr(w http.ResponseWriter, err error) {
 		status = 409
 	case errors.Is(err, ErrValidation), errors.Is(err, ErrInvalidMoney):
 		status = 422
+	case errors.Is(err, ErrEmailDeliveryUnavailable):
+		status = http.StatusServiceUnavailable
 	}
 	writeJSON(w, status, apiError{Message: err.Error()})
 }
@@ -285,6 +287,10 @@ func (a *API) signup(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := decodeBody(r, &input); err != nil {
 		writeErr(w, err)
+		return
+	}
+	if a.Config.Env != "development" && !a.emailDeliveryConfigured() {
+		writeErr(w, ErrEmailDeliveryUnavailable)
 		return
 	}
 	if strings.TrimSpace(input.BusinessID) != "" {
@@ -494,6 +500,10 @@ func (a *API) verifyEmail(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, map[string]any{"user": map[string]any{"id": user.ID, "email": user.Email, "verified": true}, "business": business, "csrfToken": csrf})
 }
 func (a *API) passwordResetRequest(w http.ResponseWriter, r *http.Request) {
+	if !a.emailDeliveryConfigured() {
+		writeErr(w, ErrEmailDeliveryUnavailable)
+		return
+	}
 	var req struct{ Email string }
 	if err := decodeBody(r, &req); err != nil {
 		writeJSON(w, 202, map[string]any{"accepted": true})

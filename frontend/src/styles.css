@@ -348,6 +348,9 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .integration-card { display: grid; grid-template-columns: 1fr; gap: 0; }
 .integration-card > div:first-child { margin-bottom: 6px; }
 .integration-row { display: flex; align-items: center; justify-content: space-between; gap: 15px; padding: 13px 0; border-bottom: 1px solid #f0eef3; }
+.integration-action { width: 100%; border: 0; background: transparent; color: inherit; text-align: left; font: inherit; cursor: pointer; }
+.integration-action:hover { background: #fbf9fe; }
+.integration-action:focus-visible { outline: 3px solid rgba(130, 99, 200, .34); outline-offset: 2px; border-radius: 8px; }
 .integration-row > span { display: flex; align-items: center; gap: 10px; }
 .integration-row strong, .integration-row small { display: block; }
 .integration-row strong { font-size: 10px; font-weight: 600; }
@@ -473,6 +476,10 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .review-lock { display: flex; align-items: flex-start; gap: 8px; margin: 12px 0; color: #7d62b5; }
 .review-lock span { color: #6f6d7b; font-size: 8px; line-height: 1.5; }
 .review-lock svg { flex: 0 0 auto; }
+.email-unavailable { display: flex; align-items: flex-start; gap: 11px; margin: 0 0 14px; padding: 12px; border: 1px solid #ece7f5; border-radius: 9px; background: #fbf9fe; }
+.email-unavailable-icon { display: grid; flex: 0 0 auto; place-items: center; width: 32px; height: 32px; border-radius: 9px; background: #f0eafb; color: #7558b7; }
+.email-unavailable strong { display: block; color: #343241; font-size: 10px; font-weight: 600; }
+.email-unavailable p { margin: 4px 0 0; color: #6f6d7b; font-size: 9px; line-height: 1.5; }
 .toast { position: fixed; z-index: 100; right: 22px; bottom: 20px; display: flex; align-items: center; gap: 8px; max-width: min(420px, calc(100vw - 32px)); padding: 11px 14px; border: 1px solid #e7e3ec; border-radius: 9px; background: #fff; color: #514f5d; box-shadow: 0 10px 30px rgba(33,30,43,.12); font-size: 10px; }
 .toast svg { flex: 0 0 auto; color: #286449; }
 .toast-error { border-color: #edd4d7; color: #773b41; background: #fffafa; }
