@@ -446,10 +446,31 @@ export default function App() {
     const quote = data.quotations.find((item) => item.id === quotationId); if (!quote) return;
     const sub: WorkspaceData['subscriptions'][number] = { id: crypto.randomUUID(), number: `SUB-${1049 + data.subscriptions.length}`, customerId: quote.customerId, planId: data.plans[0]?.id ?? '', status: 'Draft', startedAt: new Date().toISOString().slice(0, 10), renewsAt: '', amount: quote.amount, seats: 1, paymentTerms: 'Net 30' };
     void commit('/subscriptions', { quotationId, customerId: quote.customerId }, (response) => {
-      const id = responseId(response, sub.id);
-      patch('subscriptions', (items) => [...items, { ...sub, id }]);
+      const result = response && typeof response === 'object' ? response as Record<string, unknown> : {};
+      const lines = Array.isArray(result.lines) ? result.lines as Record<string, unknown>[] : [];
+      const terms = Number(result.paymentTermsDays ?? 30);
+      const created = {
+        ...sub,
+        id: String(result.id ?? sub.id),
+        number: String(result.number ?? sub.number),
+        planId: String(result.planId ?? sub.planId),
+        status: String(result.status ?? sub.status) as WorkspaceData['subscriptions'][number]['status'],
+        startedAt: String(result.startDate ?? sub.startedAt),
+        renewsAt: String(result.expiryDate ?? ''),
+        amount: typeof result.amount === 'string' ? result.amount : quote.amount,
+        seats: Math.max(1, Number(lines[0]?.quantity ?? 1)),
+        paymentTerms: terms === 0 ? 'Due on receipt' : `Net ${terms}`,
+      };
+      patch('subscriptions', (items) => [...items, created]);
       patch('quotations', (items) => items.map((item) => item.id === quote.id ? { ...item, status: 'Converted' } : item));
       navigate('subscriptions');
+    });
+  };
+  const acceptQuotation = (quotationId: string) => {
+    const quote = data.quotations.find((item) => item.id === quotationId);
+    if (!quote || quote.status !== 'Sent' || quote.validUntil < new Date().toISOString().slice(0, 10)) return;
+    void commit(`/quotations/${encodeURIComponent(quotationId)}/accept`, {}, () => {
+      patch('quotations', (items) => items.map((item) => item.id === quote.id ? { ...item, status: 'Accepted' } : item));
     });
   };
   const exportData = async () => {
@@ -636,7 +657,7 @@ export default function App() {
   });
 
   const actions: PageActions = {
-    navigate, create, confirmInvoice, cancelInvoice, sendInvoice, openPayment, payOnline, transitionSubscription, convertQuotation, exportData, downloadExport, runBilling, decideApproval, search, setSearch,
+    navigate, create, confirmInvoice, cancelInvoice, sendInvoice, openPayment, payOnline, transitionSubscription, convertQuotation, acceptQuotation, exportData, downloadExport, runBilling, decideApproval, search, setSearch,
     sendQuotation: (id: string) => {
       const quote = data.quotations.find((item) => item.id === id); if (!quote) return;
       const customer = data.customers.find((item) => item.id === quote.customerId);

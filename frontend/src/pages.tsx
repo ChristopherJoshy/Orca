@@ -16,6 +16,7 @@ export type PageActions = {
   transitionSubscription: (subscriptionId: string, action: string) => void;
   convertQuotation: (quotationId: string) => void;
   sendQuotation: (quotationId: string) => void;
+  acceptQuotation: (quotationId: string) => void;
   exportData: () => void;
   downloadExport: (jobId: string) => void;
   runBilling: () => Promise<number | null>;
@@ -547,6 +548,7 @@ export function PortalPage({ data, actions, isCustomer, canPayOnline }: { data: 
   }
   const subscriptions = data.subscriptions.filter((sub) => sub.customerId === customer?.id && ['Active', 'Paused'].includes(sub.status));
   const invoices = data.invoices.filter((invoice) => invoice.customerId === customer?.id);
+  const offers = data.quotations.filter((quote) => quote.customerId === customer?.id && ['Sent', 'Accepted'].includes(quote.status));
   return <>
     <PageHeading eyebrow="Customer portal" title={`Welcome, ${customer.name}`} description="A focused view of your own subscriptions, invoices, and payments." actions={<Badge tone="blue">Your account</Badge>} />
     <div className="portal-banner"><span className="portal-brand"><Icon name="overview" size={17} />{customer.company || 'Customer portal'}</span><span>{customer.email}</span></div>
@@ -555,6 +557,17 @@ export function PortalPage({ data, actions, isCustomer, canPayOnline }: { data: 
       <Card><span>Open balance</span><strong className="small-stat-money">{money(invoices.filter((invoice) => invoice.status === 'Confirmed').reduce((sum, invoice) => addMoney(sum, outstanding(invoice)), '0.00' as Money))}</strong></Card>
       <Card><span>Payments</span><strong>{data.payments.filter((payment) => payment.customerId === customer?.id).length}</strong></Card>
     </div>
+    {offers.length > 0 && <Card className="portal-offers">
+      <TableToolbar title="Offers for you" count={`${offers.length} ${offers.length === 1 ? 'offer' : 'offers'}`} search="" />
+      <p className="empty-inline">Review the total and validity before accepting. The business can then prepare your subscription.</p>
+      <TableWrap><thead><tr><th>Offer</th><th>Valid through</th><th>Status</th><th className="align-right">Total</th><th><span className="sr-only">Offer actions</span></th></tr></thead>
+        <tbody>{offers.map((quote) => {
+          const expired = quote.validUntil < new Date().toISOString().slice(0, 10);
+          const canAccept = quote.status === 'Sent' && !expired;
+          return <tr key={quote.id}><td><strong>{quote.number}</strong><small>{quote.title}</small></td><td>{dateFmt(quote.validUntil)}</td><td><Status value={quote.status === 'Sent' && expired ? 'Expired' : quote.status} /></td><td className="align-right"><CellMoney value={quote.amount} strong /></td><td>{canAccept ? <button type="button" className="small-action" onClick={() => actions.acceptQuotation(quote.id)}>Accept offer</button> : <span className="muted">—</span>}</td></tr>;
+        })}</tbody>
+      </TableWrap>
+    </Card>}
     <Card className="portal-subscriptions">
       <TableToolbar title="Your subscriptions" count={`${subscriptions.length} agreements`} search="" />
       <TableWrap><thead><tr><th>Subscription</th><th>Plan</th><th>Seats</th><th>Next renewal</th><th>Status</th><th className="align-right">Amount</th><th><span className="sr-only">Actions</span></th></tr></thead>

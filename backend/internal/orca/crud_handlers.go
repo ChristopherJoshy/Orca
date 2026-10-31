@@ -552,6 +552,16 @@ func (a *API) acceptQuotation(w http.ResponseWriter, r *http.Request, auth Authe
 		if quote.Status != "Sent" {
 			return ErrConflict
 		}
+		if quote.ValidUntil != "" {
+			business := st.Businesses[auth.Actor.BusinessID]
+			location, err := time.LoadLocation(business.Timezone)
+			if err != nil {
+				location = time.UTC
+			}
+			if quote.ValidUntil < time.Now().In(location).Format("2006-01-02") {
+				return ErrConflict
+			}
+		}
 		quote.Status = "Accepted"
 		st.Quotations[id] = quote
 		result = quote

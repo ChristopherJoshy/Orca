@@ -736,14 +736,18 @@ func planWire(v Plan) map[string]any {
 }
 func subscriptionWire(v Subscription, st *State) map[string]any {
 	amount := "0.00"
-	if p, ok := st.Plans[v.PlanID]; ok {
-		q := 1
-		if len(v.Lines) > 0 && v.Lines[0].Quantity > 0 {
-			q = v.Lines[0].Quantity
+	if len(v.Lines) > 0 {
+		total := decimal.Zero
+		for _, line := range v.Lines {
+			price, err := ParseDecimal(line.UnitPrice)
+			if err == nil && line.Quantity > 0 {
+				total = total.Add(price.Mul(decimal.NewFromInt(int64(line.Quantity))))
+			}
 		}
-		d, e := ParseDecimal(p.SalesPrice)
-		if e == nil {
-			amount = amountString(d.Mul(decimalFromInt(q)))
+		amount = amountString(total)
+	} else if p, ok := st.Plans[v.PlanID]; ok {
+		if price, err := ParseDecimal(p.SalesPrice); err == nil {
+			amount = amountString(price)
 		}
 	}
 	return map[string]any{"id": v.ID, "businessId": v.BusinessID, "customerId": v.CustomerID, "planId": v.PlanID, "number": v.Number, "status": v.Status, "startDate": v.StartDate, "startedAt": v.StartDate, "expiryDate": v.ExpiryDate, "renewsAt": v.ExpiryDate, "paymentTermsDays": v.PaymentTermsDays, "lines": v.Lines, "amount": amount, "version": v.Version}

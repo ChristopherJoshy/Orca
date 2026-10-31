@@ -2,7 +2,7 @@
 
 **Know what billed, why it billed, and what is still owed.**
 
-ORCA is a subscription and recurring-billing workspace for teams that need reliable renewals, explainable invoices, and clear receivables. It follows a subscription from product and plan setup through quotation, billing, payment, and finance review.
+ORCA is a subscription and recurring-billing workspace for teams that need reliable renewals, explainable invoices, and clear receivables. It follows a subscription from product and plan setup through reusable offers that customers can accept, staff conversion, billing, payment, and finance review.
 
 > **Project status:** Working local MVP for the Odoo Hackathon. Provider delivery, durable scheduling, full agent coverage, performance targets, and production hosting still need verification. ORCA is not production-ready billing software; see the [acceptance matrix](docs/requirements.md) for implementation evidence and open work.
 

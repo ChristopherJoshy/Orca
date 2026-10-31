@@ -70,3 +70,11 @@
 - Removed generic session-security and copyright/workspace footer text from the sign-in and signed-in screens at the user's request.
 - **Verification:** `make verify` passed. The local PostgreSQL browser flow created and reloaded a plan/product template, then created a ₹1,250 quotation from it. Desktop (1440×900) and mobile (390×844) had no horizontal overflow; Axe reported zero violations after the mobile drawer settled.
 - **Known limits:** template edit/delete are not implemented. The browser Axe run does not replace manual verification of every color pairing; avatar and amber status contrast remain in the broader visual review.
+
+## 2026-10-31 — Customer quotation acceptance and conversion
+
+- Added a customer portal view for sent offers, including validity, total, status, and an action to accept an unexpired offer. The API enforces customer ownership, sent status, and business-timezone expiry.
+- Staff can convert an accepted quotation into a draft subscription. The handoff retains the quoted customer, plan, product lines, quantities, and prices; API response totals now sum every stored line, and quote conversion is recorded in the same store transaction.
+- Updated the OpenAPI contract, README workflow description, and acceptance matrix. Added tests for successful acceptance/conversion, expired offers, and foreign-customer rejection.
+- **Verification:** focused Go tests and frontend typecheck passed. The saved local browser workflow also completed acceptance and conversion. Browser automation could not be re-opened in this session; full `make verify` is being run before commit.
+- **Known limits:** quotation email delivery remains queued through the outbox and was not sent by a live provider; template editing and deletion remain open.

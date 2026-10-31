@@ -181,19 +181,24 @@ paths:
   /quotations/{id}/accept:
     post:
       summary: Accept a sent quotation as its linked customer
+      description: Accepts only a sent, unexpired quotation belonging to the authenticated customer. The validity date is evaluated in the business timezone.
       parameters: [{ $ref: '#/components/parameters/Id' }]
       responses:
         '200': { description: Quotation accepted }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
   /subscriptions:
     get:
       summary: List subscriptions visible to actor
       responses:
         '200': { description: Subscription page }
     post:
-      summary: Prepare subscription draft
+      summary: Prepare subscription draft or convert an accepted quotation
+      description: When quotationId is supplied, the accepted quotation's customer, plan and immutable lines are copied into the draft; successful conversion marks the quotation Converted in the same transaction.
       responses:
         '201': { description: Draft subscription created }
+        '409': { $ref: '#/components/responses/Conflict' }
   /subscriptions/{id}/transition:
     post:
       summary: Request an allowed lifecycle transition
