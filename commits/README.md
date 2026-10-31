@@ -9,3 +9,4 @@ Each implementation commit has a consecutively numbered Markdown record. The com
 - [0005 — Product narrative, team credits, and backend setup guide](0005-product-and-operations-docs.md)
 - [0006 — Reusable quotation templates and cleaner auth screens](0006-quotation-templates-and-clean-auth.md)
 - [0007 — Customer quotation acceptance and subscription handoff](0007-customer-quotation-acceptance.md)
+- [0008 — Simplify authentication entry copy](0008-simplify-auth-entry-copy.md)

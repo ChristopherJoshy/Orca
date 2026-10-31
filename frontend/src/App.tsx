@@ -238,12 +238,10 @@ function AuthScreen({ apiState, connectionError, onRetry, onAuthenticated }: { a
         <div className="auth-story-copy"><span className="auth-eyebrow"><i /> SUBSCRIPTION OPERATIONS</span><h1>Every cycle,<br /><em>accounted for.</em></h1><p>Reliable recurring billing, explainable invoices, and a workspace that keeps every number connected to its source.</p>
           <div className="auth-feature-list"><div><span><Icon name="invoices" size={17} /></span><strong>Invoice Truth</strong><small>See how every total was calculated.</small></div><div><span><Icon name="reports" size={17} /></span><strong>Billing Control Tower</strong><small>Understand what needs attention.</small></div><div><span><Icon name="spark" size={17} /></span><strong>ORCA Copilot</strong><small>Move work forward with review built in.</small></div></div>
         </div>
-        <div className="auth-story-footer"><span>Private by workspace</span><span>INR billing</span><span>Audit-ready records</span></div>
       </div>
     </section>
     <section className="auth-main" aria-labelledby="auth-title">
       <div className="auth-card">
-        <div className="auth-card-top"><span className="auth-card-mark"><Icon name={mode === 'login' ? 'shield' : mode === 'signup' ? 'plus' : 'mail'} size={18} /></span><span>{mode === 'login' ? 'SECURE SIGN IN' : mode === 'signup' ? 'NEW WORKSPACE' : mode === 'customer' ? 'CUSTOMER PORTAL' : 'ACCOUNT RECOVERY'}</span></div>
         <h2 id="auth-title">{title}</h2><p className="auth-description">{description}</p>
         {isLoading && <div className="auth-connection" role="status"><span className="auth-spinner" />Checking your secure workspace connection…</div>}
         {!isLoading && apiState === 'offline' && <div className="auth-connection auth-connection-error" role="alert"><Icon name="close" size={17} /><span>{connectionError || 'ORCA could not reach the API. Start the backend and database, then try again.'}</span><button type="button" onClick={onRetry}>Retry</button></div>}

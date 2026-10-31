@@ -78,3 +78,9 @@
 - Updated the OpenAPI contract, README workflow description, and acceptance matrix. Added tests for successful acceptance/conversion, expired offers, and foreign-customer rejection.
 - **Verification:** focused Go tests and frontend typecheck passed. The saved local browser workflow also completed acceptance and conversion. Browser automation could not be re-opened in this session; full `make verify` is being run before commit.
 - **Known limits:** quotation email delivery remains queued through the outbox and was not sent by a live provider; template editing and deletion remain open.
+
+## 2026-10-31 — Clean up authentication microcopy and contrast
+
+- Removed the redundant auth card eyebrow and the small `Private by workspace / INR billing / Audit-ready records` footer line. The entry screen now uses the page title and task-specific description for context.
+- Darkened inactive account-tab text to clear WCAG AA contrast against its lavender-gray surface while preserving the existing plum/lavender palette.
+- **Verification:** frontend typecheck and production build passed. Isolated agent-browser inspection at 1440×900, 834×1112, and 390×844 found no horizontal overflow; Axe reported zero violations and zero incomplete checks at all three sizes. `git diff --check` passed.
