@@ -36,6 +36,7 @@ type API struct {
 	Store        *Store
 	Config       ServerConfig
 	mux          chi.Router
+	resendClient *http.Client
 	limitMu      sync.Mutex
 	limits       map[string]rateWindow
 	agentMu      sync.Mutex
@@ -52,12 +53,16 @@ type apiError struct {
 	Fields  map[string]string `json:"fields,omitempty"`
 }
 
-func NewAPI(store *Store, config ServerConfig) http.Handler {
-	return newAPI(store, config).mux
+func NewAPI(store *Store, config ServerConfig) *API {
+	return newAPI(store, config)
+}
+
+func (a *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	a.mux.ServeHTTP(w, r)
 }
 
 func newAPI(store *Store, config ServerConfig) *API {
-	a := &API{Store: store, Config: config, limits: map[string]rateWindow{}, agentCancels: map[string]context.CancelFunc{}}
+	a := &API{Store: store, Config: config, resendClient: &http.Client{Timeout: 12 * time.Second}, limits: map[string]rateWindow{}, agentCancels: map[string]context.CancelFunc{}}
 	a.stripe = stripeCheckoutSessionCreatorHTTP{apiKey: config.StripeAPIKey, endpoint: stripeCheckoutSessionsEndpoint, client: &http.Client{Timeout: 15 * time.Second}}
 	r := chi.NewRouter()
 	r.Use(a.securityHeaders)

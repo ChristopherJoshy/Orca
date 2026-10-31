@@ -8,7 +8,9 @@ Use Stripe test mode for checkout. The ORCA invoice/ledger remains authoritative
 
 ## Email
 
-Send verification/reset links, quotations, invoices, and collection notices through a delivery interface. Templates use stored document evidence and tenant sender settings. Persist message/outbox ID, recipient, purpose, provider ID, status, attempt, and timestamps; do not place reset tokens in logs. A failed email is retryable and does not roll back a committed invoice.
+Account verification and reset messages use the Resend adapter directly. Approved invoice and quotation send requests are written to the PostgreSQL outbox in the same transaction as their audit event. The cancellable outbox worker renders document data from stored invoice snapshots or quotation lines, escapes untrusted text with Go's `html/template`, and sends through Resend with a stable tenant-bound idempotency key. Attempts, delivery timestamps, and bounded error details are retained on the outbox event; provider failure does not roll back the business document. The worker runs immediately and repeats at `ORCA_EMAIL_INTERVAL` (default `1m`).
+
+Resend documents a 24-hour idempotency-key retention window. Retry ambiguous provider outcomes within that window to preserve the provider-side duplicate protection; ORCA's persistent event key remains stable. See [Resend idempotency keys](https://resend.com/changelog/idempotency-keys). Fake-provider tests cover successful delivery, retry after an ambiguous failure, duplicate processing, tenant-bound keys, and HTML escaping. No live customer email has been sent; production delivery still requires a verified sender and provider credentials.
 
 ## Groq and agent model calls
 
@@ -18,4 +20,4 @@ One direct Groq chat-completions request returned HTTP 200 in the local environm
 
 ## Configuration and status
 
-Environment names are documented in `.env.example`. Configure `STRIPE_SECRET_KEY` with a test-mode secret key and `STRIPE_WEBHOOK_SECRET` with the endpoint signing secret. Readiness should report whether required configuration exists and whether a measured provider health check succeeded; never display secret values. When unconfigured/unreachable, keep manual payment, invoices, reports, and non-agent UI usable. Provider-specific installation/account provisioning is owner-managed. Live provider behavior is pending until sandbox evidence appears in history.
+Environment names are documented in `.env.example`. `ORCA_BILLING_INTERVAL` and `ORCA_EMAIL_INTERVAL` control the two in-process workers. Configure `STRIPE_SECRET_KEY` with a test-mode secret key and `STRIPE_WEBHOOK_SECRET` with the endpoint signing secret. Readiness should report whether required configuration exists and whether a measured provider health check succeeded; never display secret values. When unconfigured/unreachable, keep manual payment, invoices, reports, and non-agent UI usable; queued email remains pending if Resend is not configured. Provider-specific installation/account provisioning is owner-managed. Live provider behavior is pending until sandbox evidence appears in history.

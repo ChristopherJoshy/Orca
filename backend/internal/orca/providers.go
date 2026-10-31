@@ -36,7 +36,10 @@ func (a *API) sendResendEmail(ctx context.Context, to, subject, htmlBody, idempo
 	if idempotencyKey != "" {
 		req.Header.Set("Idempotency-Key", idempotencyKey)
 	}
-	client := &http.Client{Timeout: 12 * time.Second}
+	client := a.resendClient
+	if client == nil {
+		client = &http.Client{Timeout: 12 * time.Second}
+	}
 	resp, err := client.Do(req)
 	if err != nil {
 		return err

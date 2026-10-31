@@ -16,3 +16,4 @@ Each implementation commit has a consecutively numbered Markdown record. The com
 - [0012 — Complete discount validity controls](0012-discount-validity.md)
 - [0013 — Complete customer pause and resume controls](0013-customer-subscription-self-service.md)
 - [0014 — Correct posted receivables and partial payments](0014-partial-payment-receivables.md)
+- [0015 — Deliver queued invoice and quotation emails](0015-email-outbox-delivery.md)

@@ -11,7 +11,7 @@
 
 ## Current implementation
 
-The running API uses Go/chi and pgx with Goose migrations. PostgreSQL requests currently load a business-scoped state snapshot into domain maps and persist a transactional diff; this is an implementation bridge, not the planned sqlc repository layer. The official Go MCP SDK server is mounted on the API process, with OAuth registration/authorization state partly held in memory. A cancellable in-process recurring-billing worker catches up each business on startup and a configurable interval; there is no River job queue. Outbox records are persisted transactionally, but email/provider delivery workers are not implemented. See [development](development.md) and the [acceptance matrix](requirements.md) for the remaining gaps.
+The running API uses Go/chi and pgx with Goose migrations. PostgreSQL requests currently load a business-scoped state snapshot into domain maps and persist a transactional diff; this is an implementation bridge, not the planned sqlc repository layer. The official Go MCP SDK server is mounted on the API process, with OAuth registration/authorization state partly held in memory. Cancellable in-process workers catch up recurring billing and deliver invoice/quotation outbox events on configurable intervals; there is no River job queue or durable scheduler. Live provider delivery is not verified. See [development](development.md) and the [acceptance matrix](requirements.md) for the remaining gaps.
 
 ## Trust and data flow
 
@@ -28,7 +28,7 @@ The actor/business scope is derived from a verified session or OAuth grant. A ca
 
 ## Reliability
 
-Implemented financial writes use a database transaction for invoice identity, snapshot, journal, audit, outbox, and related approval/payment records. Outbox delivery is not yet active because there is no durable worker. Agent runs and export generation are process-bound, so they can lose in-flight work on restart. Provider calls carry stable operation keys where implemented; complete Stripe outcome reconciliation remains open.
+Implemented financial writes use a database transaction for invoice identity, snapshot, journal, audit, outbox, and related approval/payment records. Email delivery runs from persisted outbox rows through Resend with stable idempotency keys and recorded retry state. The worker remains process-bound; Resend retains keys for 24 hours, and live provider behavior is not verified. Agent runs and export generation are also process-bound, so they can lose in-flight work on restart. Complete Stripe outcome reconciliation remains open.
 
 ## API conventions
 

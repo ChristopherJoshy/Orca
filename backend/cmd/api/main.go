@@ -38,7 +38,7 @@ func main() {
 		AllowedOrigin:       os.Getenv("ORCA_ALLOWED_ORIGIN"),
 		Env:                 environment,
 		ResendAPIKey:        os.Getenv("RESEND_API_KEY"),
-		EmailFrom:           env("EMAIL_FROM", "ORCA <noreply@example.com>"),
+		EmailFrom:           strings.TrimSpace(os.Getenv("EMAIL_FROM")),
 		PublicURL:           env("ORCA_PUBLIC_URL", "http://localhost:5173"),
 		GroqAPIKey:          os.Getenv("GROQ_API_KEY"),
 		GroqModel:           env("GROQ_MODEL", "openai/gpt-oss-120b"),
@@ -51,9 +51,16 @@ func main() {
 		billingInterval = orca.DefaultBillingWorkerInterval
 	}
 	billingWorkerDone := orca.StartBillingWorker(ctx, store, billingInterval, slog.Default())
+	emailInterval, err := time.ParseDuration(env("ORCA_EMAIL_INTERVAL", orca.DefaultEmailOutboxWorkerInterval.String()))
+	if err != nil || emailInterval <= 0 {
+		slog.Warn("invalid ORCA_EMAIL_INTERVAL; using default", "value", os.Getenv("ORCA_EMAIL_INTERVAL"), "default", orca.DefaultEmailOutboxWorkerInterval)
+		emailInterval = orca.DefaultEmailOutboxWorkerInterval
+	}
+	emailWorkerDone := orca.StartEmailOutboxWorker(ctx, api, emailInterval, slog.Default())
 	defer func() {
 		stop()
 		<-billingWorkerDone
+		<-emailWorkerDone
 	}()
 	server := &http.Server{Addr: env("ORCA_ADDR", ":8080"), Handler: api, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 60 * time.Second, IdleTimeout: 60 * time.Second}
 	go func() {

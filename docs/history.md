@@ -126,3 +126,12 @@
 - Corrected finance summaries to exclude Draft and Cancelled invoices from invoiced totals and receivables; overdue counts only confirmed invoices with a remaining past-due balance.
 - Added an HTTP flow covering partial allocation (invoice stays Confirmed), final settlement (Paid), and the resulting receivable/overdue totals while unrelated Draft and Cancelled invoices remain excluded.
 - **Verification:** focused Go test and `make verify` passed; `git diff --check` passed.
+
+## 2026-10-31 — Resend outbox delivery
+
+- Added a cancellable worker that sends queued invoice and quotation messages using stored document evidence, escaped HTML templates, and stable tenant-bound Resend idempotency keys. Delivery attempts/errors and completion timestamps are saved on the existing outbox rows.
+- Wired the worker into API startup and graceful shutdown with configurable `ORCA_EMAIL_INTERVAL` (default one minute). Missing Resend credentials leave the worker disabled and queued events intact.
+- Added fake-provider tests for delivery, ambiguous failure/retry, duplicate processing, stable keys, and HTML escaping; no live customer messages were sent. Resend retains idempotency keys for 24 hours, so ambiguous retries must occur within that window.
+- Updated environment templates, provider contracts, README, deployment notes, and acceptance evidence.
+- **Verification:** `make verify` passed, including the race detector; OpenAPI unaffected; `git diff --check` passed.
+- **Known limits:** live sender/provider behavior is unverified; email worker is in-process, and account verification/reset emails still use direct provider calls.
