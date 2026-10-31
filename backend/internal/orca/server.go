@@ -70,7 +70,7 @@ func newAPI(store *Store, config ServerConfig) *API {
 	r.Post("/api/v1/auth/password-reset/complete", a.passwordResetComplete)
 	r.Get("/api/v1/me", a.protected(false, a.me))
 	r.Get("/api/v1/portal/me", a.protected(false, a.portalMe))
-	for _, resource := range []string{"products", "plans", "customers", "quotations", "subscriptions", "invoices", "payments", "discounts", "taxes", "staff", "exports", "agent/approvals", "agent/runs"} {
+	for _, resource := range []string{"products", "plans", "customers", "quotations", "quotation-templates", "subscriptions", "invoices", "payments", "discounts", "taxes", "staff", "exports", "agent/approvals", "agent/runs"} {
 		path := "/api/v1/" + resource
 		if resource == "agent/approvals" {
 			r.Get(path, a.protected(false, a.listApprovals))
@@ -107,6 +107,7 @@ func newAPI(store *Store, config ServerConfig) *API {
 			r.Post(path, a.protected(true, a.inviteStaff))
 		}
 	}
+	r.Post("/api/v1/quotation-templates", a.protected(true, a.createQuotationTemplate))
 	r.Post("/api/v1/staff/invitations", a.protected(true, a.inviteStaff))
 	r.Post("/api/v1/quotations/{id}/send", a.protected(true, a.sendQuotation))
 	r.Post("/api/v1/quotations/{id}/accept", a.protected(true, a.acceptQuotation))
@@ -663,6 +664,12 @@ func collectionItems(st *State, resource string, actor Actor) []any {
 				values = append(values, quoteWire(v))
 			}
 		}
+	case "quotation-templates":
+		if !customerOnly {
+			for _, v := range st.QuoteTemplates {
+				values = append(values, v)
+			}
+		}
 	case "subscriptions":
 		for _, v := range st.Subscriptions {
 			if !customerOnly || v.CustomerID == id {
@@ -713,7 +720,7 @@ func collectionItems(st *State, resource string, actor Actor) []any {
 	return values
 }
 func quoteWire(v Quotation) map[string]any {
-	return map[string]any{"id": v.ID, "businessId": v.BusinessID, "customerId": v.CustomerID, "number": v.Number, "title": v.Title, "name": v.Title, "date": v.CreatedAt, "createdAt": v.CreatedAt, "validUntil": v.ValidUntil, "amount": money2(v.Amount), "status": v.Status, "lines": v.Lines}
+	return map[string]any{"id": v.ID, "businessId": v.BusinessID, "customerId": v.CustomerID, "planId": v.PlanID, "number": v.Number, "title": v.Title, "name": v.Title, "date": v.CreatedAt, "createdAt": v.CreatedAt, "validUntil": v.ValidUntil, "amount": money2(v.Amount), "status": v.Status, "lines": v.Lines}
 }
 func productWire(v Product) map[string]any {
 	v.SalesPrice = money2(v.SalesPrice)

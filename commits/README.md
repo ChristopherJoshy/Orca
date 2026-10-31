@@ -7,3 +7,4 @@ Each implementation commit has a consecutively numbered Markdown record. The com
 - [0003 — Auth-first workspace, MCP/team settings, and billing reload fixes](0003-auth-mcp-team-billing-fixes.md)
 - [0004 — Verified team access across workspaces](0004-team-membership-scope.md)
 - [0005 — Product narrative, team credits, and backend setup guide](0005-product-and-operations-docs.md)
+- [0006 — Reusable quotation templates and cleaner auth screens](0006-quotation-templates-and-clean-auth.md)

@@ -330,6 +330,72 @@ func (a *API) createTax(w http.ResponseWriter, r *http.Request, auth Authenticat
 	}
 	writeJSON(w, 201, taxWire(v))
 }
+
+func (a *API) createQuotationTemplate(w http.ResponseWriter, r *http.Request, auth Authenticated) {
+	if err := checkActorStaff(auth); err != nil {
+		writeErr(w, err)
+		return
+	}
+	var req struct {
+		Name            string
+		PlanID          string
+		ProductID       string
+		Quantity        int
+		ProductQuantity int
+		ValidDays       int
+	}
+	if err := decodeBody(r, &req); err != nil {
+		writeErr(w, err)
+		return
+	}
+	req.Name = strings.TrimSpace(req.Name)
+	if req.Name == "" {
+		writeErr(w, fmt.Errorf("%w: name is required", ErrValidation))
+		return
+	}
+	if req.ValidDays < 1 || req.ValidDays > 3650 {
+		writeErr(w, fmt.Errorf("%w: validDays must be between 1 and 3650", ErrValidation))
+		return
+	}
+	if req.Quantity < 1 {
+		req.Quantity = 1
+	}
+	if req.ProductQuantity < 1 {
+		req.ProductQuantity = 1
+	}
+	id, err := newUUID()
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	now := time.Now().UTC()
+	template := QuoteTemplate{ID: id, BusinessID: auth.Actor.BusinessID, Name: req.Name, PlanID: req.PlanID, ValidDays: req.ValidDays, CreatedAt: now, Lines: []SubscriptionLine{}}
+	err = a.Store.UpdateFor(r.Context(), auth.Actor.BusinessID, func(st *State) error {
+		plan, ok := st.Plans[req.PlanID]
+		if !ok {
+			return ErrNotFound
+		}
+		if req.Quantity < plan.MinimumQuantity {
+			return fmt.Errorf("%w: quantity is below the plan minimum", ErrValidation)
+		}
+		template.Lines = append(template.Lines, SubscriptionLine{Name: plan.Name, Quantity: req.Quantity, UnitPrice: money2(plan.SalesPrice), TaxRate: rate2(plan.TaxRate)})
+		if req.ProductID != "" {
+			product, ok := st.Products[req.ProductID]
+			if !ok {
+				return ErrNotFound
+			}
+			template.Lines = append(template.Lines, SubscriptionLine{ProductID: product.ID, Name: product.Name, Quantity: req.ProductQuantity, UnitPrice: money2(product.SalesPrice), TaxRate: rate2(product.TaxRate)})
+		}
+		st.QuoteTemplates[template.ID] = template
+		return nil
+	})
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, template)
+}
+
 func (a *API) createQuotation(w http.ResponseWriter, r *http.Request, auth Authenticated) {
 	if err := checkActorStaff(auth); err != nil {
 		writeErr(w, err)
@@ -356,8 +422,9 @@ func (a *API) createQuotation(w http.ResponseWriter, r *http.Request, auth Authe
 	if req.ValidityDays > 0 {
 		req.ValidDays = req.ValidityDays
 	}
-	if req.ValidDays < 1 {
-		req.ValidDays = 30
+	if req.ValidDays < 0 {
+		writeErr(w, fmt.Errorf("%w: validDays must be positive", ErrValidation))
+		return
 	}
 	if req.Quantity < 1 {
 		req.Quantity = 1
@@ -369,7 +436,6 @@ func (a *API) createQuotation(w http.ResponseWriter, r *http.Request, auth Authe
 	}
 	now := time.Now().UTC()
 	v := Quotation{ID: id, BusinessID: auth.Actor.BusinessID, CustomerID: req.CustomerID, PlanID: req.PlanID, Title: strings.TrimSpace(req.Title), Status: "Draft", CreatedAt: now, Lines: req.Lines}
-	v.ValidUntil = now.AddDate(0, 0, req.ValidDays).Format("2006-01-02")
 	err = a.Store.UpdateFor(r.Context(), v.BusinessID, func(st *State) error {
 		if _, ok := st.Customers[v.CustomerID]; !ok {
 			return ErrNotFound
@@ -379,8 +445,25 @@ func (a *API) createQuotation(w http.ResponseWriter, r *http.Request, auth Authe
 			if !ok {
 				return ErrNotFound
 			}
+			if req.PlanID != "" && req.PlanID != template.PlanID {
+				return fmt.Errorf("%w: template plan cannot be overridden", ErrValidation)
+			}
+			v.PlanID = template.PlanID
+			if req.ValidDays == 0 {
+				req.ValidDays = template.ValidDays
+			}
+			if v.Title == "" {
+				v.Title = template.Name
+			}
 			v.Lines = append([]SubscriptionLine(nil), template.Lines...)
 		}
+		if req.ValidDays == 0 {
+			req.ValidDays = 30
+		}
+		if req.ValidDays < 1 || req.ValidDays > 3650 {
+			return fmt.Errorf("%w: validDays must be between 1 and 3650", ErrValidation)
+		}
+		v.ValidUntil = now.AddDate(0, 0, req.ValidDays).Format("2006-01-02")
 		if len(v.Lines) == 0 && v.PlanID != "" {
 			plan, ok := st.Plans[v.PlanID]
 			if !ok {

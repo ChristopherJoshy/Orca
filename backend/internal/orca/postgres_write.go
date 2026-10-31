@@ -176,7 +176,7 @@ func persistStateDiff(ctx context.Context, tx pgx.Tx, before, after *State) erro
 		if ok && reflect.DeepEqual(old, v) {
 			continue
 		}
-		if _, err := tx.Exec(ctx, "INSERT INTO quotation_templates(id,business_id,name,valid_days,lines,created_at) VALUES ($1,$2,$3,$4,$5::jsonb,$6) ON CONFLICT (id) DO UPDATE SET name=EXCLUDED.name,valid_days=EXCLUDED.valid_days,lines=EXCLUDED.lines", v.ID, v.BusinessID, v.Name, v.ValidDays, jsonBytes(v.Lines), v.CreatedAt); err != nil {
+		if _, err := tx.Exec(ctx, "INSERT INTO quotation_templates(id,business_id,name,plan_id,valid_days,lines,created_at) VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7) ON CONFLICT (id) DO UPDATE SET name=EXCLUDED.name,plan_id=EXCLUDED.plan_id,valid_days=EXCLUDED.valid_days,lines=EXCLUDED.lines", v.ID, v.BusinessID, v.Name, v.PlanID, v.ValidDays, jsonBytes(v.Lines), v.CreatedAt); err != nil {
 			return err
 		}
 	}

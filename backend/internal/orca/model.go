@@ -106,6 +106,7 @@ type QuoteTemplate struct {
 	ID         string             `json:"id"`
 	BusinessID string             `json:"businessId"`
 	Name       string             `json:"name"`
+	PlanID     string             `json:"planId"`
 	ValidDays  int                `json:"validDays"`
 	Lines      []SubscriptionLine `json:"lines"`
 	CreatedAt  time.Time          `json:"createdAt"`

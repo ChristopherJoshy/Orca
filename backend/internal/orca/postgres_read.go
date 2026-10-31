@@ -211,7 +211,7 @@ func loadState(ctx context.Context, q pgQueryer, businessID string) (*State, err
 	}
 	rows.Close()
 
-	query, args = tenantQuery("SELECT id::text,business_id::text,name,valid_days,lines,created_at FROM quotation_templates", businessID)
+	query, args = tenantQuery("SELECT id::text,business_id::text,name,COALESCE(plan_id::text,''),valid_days,lines,created_at FROM quotation_templates", businessID)
 	rows, err = q.Query(ctx, query, args...)
 	if err != nil {
 		return nil, err
@@ -219,7 +219,7 @@ func loadState(ctx context.Context, q pgQueryer, businessID string) (*State, err
 	for rows.Next() {
 		var v QuoteTemplate
 		var raw []byte
-		if err := rows.Scan(&v.ID, &v.BusinessID, &v.Name, &v.ValidDays, &raw, &v.CreatedAt); err != nil {
+		if err := rows.Scan(&v.ID, &v.BusinessID, &v.Name, &v.PlanID, &v.ValidDays, &raw, &v.CreatedAt); err != nil {
 			rows.Close()
 			return nil, err
 		}

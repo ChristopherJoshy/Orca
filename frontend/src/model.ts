@@ -43,6 +43,7 @@ export type Invoice = {
 };
 export type Payment = { id: string; invoiceId: string; customerId: string; amount: Money; date: string; method: string; note: string };
 export type Quotation = { id: string; number: string; customerId: string; title: string; date: string; validUntil: string; amount: Money; status: string };
+export type QuoteTemplate = { id: string; name: string; validDays: number; planId: string; lines: { productId: string; name: string; quantity: number; unitPrice: Money; taxRate: string }[] };
 export type Discount = { id: string; name: string; kind: 'Percentage' | 'Fixed'; value: string; scope: string; minimum: Money; minimumQuantity: number; usage: number; limit: number; endsAt: string; active: boolean };
 export type TaxRule = { id: string; name: string; region: string; rateBps: number; active: boolean };
 export type ExportJob = { id: string; name: string; createdAt: string; status: string; counts?: Record<string, number> };
@@ -52,14 +53,14 @@ export type Approval = { id: string; title: string; detail: string; amount?: Mon
 export type WorkspaceData = {
   products: Product[]; plans: Plan[]; customers: Customer[]; subscriptions: Subscription[];
   invoices: Invoice[]; payments: Payment[]; quotations: Quotation[]; discounts: Discount[];
-  taxes: TaxRule[]; exports: ExportJob[]; staff: Staff[]; approvals: Approval[];
+  quoteTemplates: QuoteTemplate[]; taxes: TaxRule[]; exports: ExportJob[]; staff: Staff[]; approvals: Approval[];
 };
 
 export const today = new Date().toISOString().slice(0, 10);
 export function emptyWorkspaceData(): WorkspaceData {
   return {
     products: [], plans: [], customers: [], subscriptions: [], invoices: [], payments: [],
-    quotations: [], discounts: [], taxes: [], exports: [], staff: [], approvals: [],
+    quotations: [], quoteTemplates: [], discounts: [], taxes: [], exports: [], staff: [], approvals: [],
   };
 }
 

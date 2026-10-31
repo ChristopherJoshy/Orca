@@ -24,7 +24,7 @@ Subscription lifecycle and invoice automation are established product capabiliti
 |---|---|
 | Accounts and access | Business-admin signup, customer portal access, email verification/reset flows, revocable sessions, CSRF checks, and business-scoped API authorization |
 | Products and plans | Product types, sales/cost prices, variants, tax rules, daily/weekly/monthly/yearly plans, minimum quantities, availability dates, and pause/close/renew settings |
-| Quotes and subscriptions | Quotations with validity, plan-backed lines, and Draft → Quotation → Confirmed → Active → Closed lifecycle; customer ownership and plan permissions are enforced in the API |
+| Quotes and subscriptions | Reusable templates preserve a billing plan and optional product line, quantity, exact prices/taxes, and offer validity. Quotations use templates or a plan directly; subscription transitions follow Draft → Quotation → Confirmed → Active → Closed. |
 | Recurring billing | On-demand billing run creates draft invoices from due subscriptions; period uniqueness prevents duplicate invoices. A durable scheduler and crash-safe catch-up worker are not implemented yet. |
 | Invoice Truth | Stored calculation snapshot, exact decimal amounts, discount-before-tax ordering, half-up line rounding, calculation-engine version, explanation steps, and canonical hash |
 | Payments and finance | Manual payment allocations, partial balances, balanced journal entries, invoice status and receivables reports; Stripe Checkout is test-mode only and posts payment from verified webhooks |

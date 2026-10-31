@@ -114,6 +114,15 @@ func TestPostgresHTTPBillingFlow(t *testing.T) {
 	productID := product["id"].(string)
 	customerID := customer["id"].(string)
 	planID := plan["id"].(string)
+	template := call(http.MethodPost, "/api/v1/quotation-templates", map[string]any{"name": "Monthly service offer", "planId": planID, "productId": productID, "quantity": 2, "validDays": 21}, cookie, csrf, 201)
+	templateList := call(http.MethodGet, "/api/v1/quotation-templates", nil, cookie, "", 200)
+	if len(templateList["items"].([]any)) != 1 {
+		t.Fatalf("quotation template list did not include the created template: %#v", templateList)
+	}
+	templateQuote := call(http.MethodPost, "/api/v1/quotations", map[string]any{"customerId": customerID, "templateId": template["id"]}, cookie, csrf, 201)
+	if templateQuote["planId"] != planID || templateQuote["title"] != "Monthly service offer" || templateQuote["validUntil"] == nil {
+		t.Fatalf("quotation did not preserve template plan, title, or validity: %#v", templateQuote)
+	}
 	date := time.Now().In(time.FixedZone("IST", 19800)).Format("2006-01-02")
 	sub := call(http.MethodPost, "/api/v1/subscriptions", map[string]any{"customerId": customerID, "planId": planID, "startDate": date, "paymentTermsDays": 14, "lines": []any{map[string]any{"productId": productID, "name": "Service", "quantity": 1, "unitPrice": "100.00", "taxRate": "18"}}}, cookie, csrf, 201)
 	planOnly := call(http.MethodPost, "/api/v1/subscriptions", map[string]any{"customerId": customerID, "planId": planID, "startDate": date, "paymentTermsDays": 14}, cookie, csrf, 201)

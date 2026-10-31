@@ -26,7 +26,7 @@ const primaryNav: { page: PageKey; icon: IconName }[] = [
 
 type Route = { page: PageKey; id?: string };
 type ChatMessage = { id: string; role: 'user' | 'assistant'; text: string; time: string };
-type CreateKind = 'customer' | 'product' | 'plan' | 'quotation' | 'subscription' | 'discount' | 'staff' | 'tax';
+type CreateKind = 'customer' | 'product' | 'plan' | 'quotation' | 'quoteTemplate' | 'subscription' | 'discount' | 'staff' | 'tax';
 
 function routeFromLocation(): Route {
   const path = window.location.pathname.replace(/\/$/, '') || '/';
@@ -97,15 +97,16 @@ function CreateRecordDialog({ kind, data, onClose, onSave }: {
     taxRate: percentageString(data.taxes.find((tax) => tax.active)?.rateBps ?? 0),
     cadence: 'Monthly', minimumQuantity: '1', availableFrom: new Date().toISOString().slice(0, 10), availableUntil: '',
     pauseAllowed: true, closeAllowed: true, renewAllowed: true,
-    customerId: data.customers.at(-1)?.id ?? '', planId: data.plans[0]?.id ?? '', quantity: String(data.plans[0]?.minimumQuantity ?? 1), validDays: '14', title: '',
+    customerId: data.customers.at(-1)?.id ?? '', planId: data.plans[0]?.id ?? '', quantity: String(data.plans[0]?.minimumQuantity ?? 1), validDays: '14', title: '', templateId: '',
+    templatePlanId: data.plans[0]?.id ?? '', templateProductId: '', templateQuantity: String(data.plans[0]?.minimumQuantity ?? 1),
     paymentTerms: '30', discountKind: 'Percentage', value: '10', scope: 'Subscriptions', minimum: '0.00', usageLimit: '25', endsAt: '',
     region: 'India · Standard rated', rate: '18', role: 'Staff',
   }));
   const [busy, setBusy] = useState(false);
   const set = (key: string, value: string | boolean) => setValues((current) => ({ ...current, [key]: value }));
   const v = (key: string) => String(values[key] ?? '');
-  const title: Record<typeof kind, string> = { customer: 'Add a customer', product: 'Add a product', plan: 'Create a plan', quotation: 'Prepare a quotation', subscription: 'New subscription', discount: 'Create discount', staff: 'Add verified ORCA account', tax: 'Add tax rule' };
-  const subtitle: Record<typeof kind, string> = { customer: 'Add a customer record to your workspace.', product: 'Set a base price and optional additive variant.', plan: 'Define billing frequency and lifecycle permissions.', quotation: 'Choose a customer and plan, then set the offer validity.', subscription: 'Create a draft subscription for a customer.', discount: 'Set eligibility, scope, and a usage limit.', staff: 'The teammate must create an ORCA account and verify this email before you can add them.', tax: 'Configure a tax rate for eligible invoice lines.' };
+  const title: Record<typeof kind, string> = { customer: 'Add a customer', product: 'Add a product', plan: 'Create a plan', quotation: 'Prepare a quotation', quoteTemplate: 'Create quotation template', subscription: 'New subscription', discount: 'Create discount', staff: 'Add verified ORCA account', tax: 'Add tax rule' };
+  const subtitle: Record<typeof kind, string> = { customer: 'Add a customer record to your workspace.', product: 'Set a base price and optional additive variant.', plan: 'Define billing frequency and lifecycle permissions.', quotation: 'Choose a customer and offer, then set validity.', quoteTemplate: 'Save a plan and optional product line to reuse in customer offers.', subscription: 'Create a draft subscription for a customer.', discount: 'Set eligibility, scope, and a usage limit.', staff: 'The teammate must create an ORCA account and verify this email before you can add them.', tax: 'Configure a tax rate for eligible invoice lines.' };
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault(); setBusy(true);
     const saved = await onSave(values);
@@ -116,18 +117,21 @@ function CreateRecordDialog({ kind, data, onClose, onSave }: {
   const select = (label: string, key: string, options: { label: string; value: string }[]) => <SelectField label={label} name={key} value={v(key)} onChange={(value) => set(key, value)} options={options} required />;
   const customerOptions = data.customers.map((customer) => ({ label: `${customer.company} · ${customer.name}`, value: customer.id }));
   const planOptions = data.plans.map((plan) => ({ label: `${plan.name} · ${money(plan.price)}`, value: plan.id }));
+  const templateOptions = data.quoteTemplates.map((template) => ({ label: `${template.name} · ${template.validDays} days`, value: template.id }));
   const selectedPlanMinimum = Math.max(1, data.plans.find((plan) => plan.id === v('planId'))?.minimumQuantity ?? 1);
+  const selectedTemplatePlanMinimum = Math.max(1, data.plans.find((plan) => plan.id === v('templatePlanId'))?.minimumQuantity ?? 1);
   return <Dialog title={title[kind]} description={subtitle[kind]} onClose={onClose}>
     <Form onSubmit={submit}>
       {kind === 'customer' && <div className="form-grid">{text('Contact name', 'name', 'text', 'e.g. Leena Shah')}{text('Email address', 'email', 'email', 'name@company.example')}{text('Company', 'company', 'text', 'Company name')}{text('Phone', 'phone', 'tel', '+91 90000 00000', false)}</div>}
       {kind === 'product' && <div className="form-grid">{text('Product name', 'name', 'text', 'e.g. Orca Business')}{select('Product type', 'type', ['Software', 'Add-on', 'Service', 'Physical product'].map((value) => ({ label: value, value })))}{text('Sales price · INR', 'price', 'number', '2499.00', true, '0', '0.01')}{text('Cost price · INR', 'cost', 'number', '620.00', true, '0', '0.01')}{text('Tax rate (%)', 'taxRate', 'number', '18.00', true, '0', '0.01')}{text('Notes', 'notes', 'text', 'Optional product notes', false)}<div className="form-section-label">Optional variant</div>{text('Variant or brand', 'variantName', 'text', 'e.g. Enterprise', false)}{text('Price adjustment · INR', 'variantAdjustment', 'number', '560.00', false, '0', '0.01')}</div>}
       {kind === 'plan' && <><div className="form-grid">{text('Plan name', 'name', 'text', 'Business monthly')}{text('Plan price · INR', 'price', 'number', '2499.00', true, '0', '0.01')}{select('Billing interval', 'cadence', ['Daily', 'Weekly', 'Monthly', 'Yearly'].map((value) => ({ label: value, value })))}{text('Minimum quantity', 'minimumQuantity', 'number', '1', true, '1', '1')}{text('Tax rate (%)', 'taxRate', 'number', '18.00', true, '0', '0.01')}{text('Available from', 'availableFrom', 'date')}{text('Available until', 'availableUntil', 'date', '', false)}</div><div className="form-toggle-stack"><ToggleField label="Allow pause" checked={Boolean(values.pauseAllowed)} onChange={(value) => set('pauseAllowed', value)} /><ToggleField label="Allow early close" checked={Boolean(values.closeAllowed)} onChange={(value) => set('closeAllowed', value)} /><ToggleField label="Allow renewal" checked={Boolean(values.renewAllowed)} onChange={(value) => set('renewAllowed', value)} /></div></>}
-      {kind === 'quotation' && <div className="form-grid">{text('Quotation title', 'title', 'text', 'e.g. Core monthly offer')}{select('Customer', 'customerId', customerOptions)}{select('Plan', 'planId', planOptions)}{text(`Quantity · minimum ${selectedPlanMinimum}`, 'quantity', 'number', String(selectedPlanMinimum), true, String(selectedPlanMinimum), '1')}{text('Valid for (days)', 'validDays', 'number', '14', true, '1', '1')}</div>}
+      {kind === 'quotation' && <div className="form-grid">{text('Quotation title', 'title', 'text', 'e.g. Core monthly offer')}{select('Customer', 'customerId', customerOptions)}<SelectField label="Start from a saved template (optional)" name="templateId" value={v('templateId')} onChange={(value) => set('templateId', value)} options={[{ label: 'Choose a plan below', value: '' }, ...templateOptions]} />{!v('templateId') && <>{select('Plan', 'planId', planOptions)}{text(`Quantity · minimum ${selectedPlanMinimum}`, 'quantity', 'number', String(selectedPlanMinimum), true, String(selectedPlanMinimum), '1')}{text('Valid for (days)', 'validDays', 'number', '14', true, '1', '1')}</>}</div>}
+      {kind === 'quoteTemplate' && <div className="form-grid">{text('Template name', 'name', 'text', 'e.g. Business monthly offer')}{select('Billing plan', 'templatePlanId', planOptions)}<SelectField label="Additional product (optional)" name="templateProductId" value={v('templateProductId')} onChange={(value) => set('templateProductId', value)} options={[{ label: 'No additional product', value: '' }, ...data.products.map((product) => ({ label: `${product.name} · ${money(product.price)}`, value: product.id }))]} />{text(`Plan quantity · minimum ${selectedTemplatePlanMinimum}`, 'templateQuantity', 'number', String(selectedTemplatePlanMinimum), true, String(selectedTemplatePlanMinimum), '1')}{text('Offer validity (days)', 'validDays', 'number', '14', true, '1', '1')}</div>}
       {kind === 'subscription' && <div className="form-grid">{select('Customer', 'customerId', customerOptions)}{select('Plan', 'planId', planOptions)}{text(`Quantity · minimum ${selectedPlanMinimum}`, 'quantity', 'number', String(selectedPlanMinimum), true, String(selectedPlanMinimum), '1')}{select('Payment terms', 'paymentTerms', [{ label: 'Due on receipt', value: '0' }, { label: 'Net 15', value: '15' }, { label: 'Net 30', value: '30' }])}{text('Start date', 'availableFrom', 'date')}</div>}
       {kind === 'discount' && <div className="form-grid">{text('Discount name', 'name', 'text', 'Annual commitment')}{select('Discount type', 'discountKind', [{ label: 'Percentage', value: 'Percentage' }, { label: 'Fixed amount', value: 'Fixed' }])}{text(values.discountKind === 'Fixed' ? 'Amount · INR' : 'Percentage off', 'value', 'number', values.discountKind === 'Fixed' ? '1500.00' : '10', true, '0', '0.01')}{select('Applies to', 'scope', [{ label: 'Entire subscription', value: 'Subscriptions' }, ...data.products.map((product) => ({ label: product.name, value: product.id }))])}{text('Minimum purchase · INR', 'minimum', 'number', '0.00', true, '0', '0.01')}{text('Minimum quantity', 'minimumQuantity', 'number', '1', true, '1', '1')}{text('Usage limit', 'usageLimit', 'number', '25', true, '1', '1')}{text('Valid through', 'endsAt', 'date')}</div>}
       {kind === 'staff' && <div className="form-grid">{text('Teammate name', 'name', 'text', 'Sam Patel')}{text('Email on the verified ORCA account', 'email', 'email', 'teammate@company.com')}<p className="form-hint">Ask your teammate to create an ORCA account and verify this exact email first. Adding them grants staff access to this workspace.</p></div>}
       {kind === 'tax' && <div className="form-grid">{text('Tax name', 'name', 'text', 'GST')}{text('Region or treatment', 'region', 'text', 'India · Standard rated')}{text('Rate (%)', 'rate', 'number', '18', true, '0', '0.01')}</div>}
-      <FormActions onCancel={onClose} submit={kind === 'staff' ? 'Add staff member' : kind === 'quotation' ? 'Prepare quotation' : kind === 'subscription' ? 'Create draft' : 'Save'} disabled={busy} />
+      <FormActions onCancel={onClose} submit={kind === 'staff' ? 'Add staff member' : kind === 'quotation' ? 'Prepare quotation' : kind === 'subscription' ? 'Create draft' : kind === 'quoteTemplate' ? 'Save template' : 'Save'} disabled={busy} />
     </Form>
   </Dialog>;
 }
@@ -261,9 +265,7 @@ function AuthScreen({ apiState, connectionError, onRetry, onAuthenticated }: { a
           {mode === 'customer' && <button type="button" onClick={() => { setMode('login'); setBusiness(''); setError(''); setNotice(''); }}>Back to sign in</button>}
           {(mode === 'forgot' || mode === 'reset') && <button type="button" onClick={() => { setMode('login'); setPassword(''); setError(''); setNotice(''); }}>Back to sign in</button>}
         </div>
-        <div className="auth-security"><Icon name="shield" size={15} /><span>Your session is encrypted and scoped to your business membership.</span></div>
       </div>
-      <div className="auth-main-footer"><span>ORCA · Subscription management</span><span>© {new Date().getFullYear()} ORCA</span></div>
     </section>
   </main>;
 }
@@ -559,18 +561,41 @@ export default function App() {
         const body = { name: plan.name, salesPrice: plan.price, interval: plan.cadence.toLowerCase(), minimumQuantity: plan.minimumQuantity, availableFrom: plan.availableFrom, availableUntil: plan.availableUntil, taxRate: percentageString(taxRateBps), allowPause: plan.pauseAllowed, allowEarlyClose: plan.closeAllowed, allowRenew: plan.renewAllowed };
         return await commit('/plans', body, (response) => patch('plans', (items) => [...items, { ...plan, id: responseId(response, id) }]));
       }
-      if (kind === 'quotation' || kind === 'subscription') {
-        const customerId = value('customerId'); const plan = data.plans.find((item) => item.id === value('planId')) ?? data.plans[0];
-        if (!plan || !customerId) throw new Error('Choose a customer and plan.');
-        const quantity = Number(value('quantity'));
+      if (kind === 'quoteTemplate') {
+        const plan = data.plans.find((item) => item.id === value('templatePlanId'));
+        if (!plan) throw new Error('Choose a billing plan for this template.');
+        const quantity = Number(value('templateQuantity'));
         if (!Number.isSafeInteger(quantity) || quantity < plan.minimumQuantity) throw new Error(`${plan.name} requires a minimum quantity of ${plan.minimumQuantity}.`);
-        const amount = multiplyMoney(plan.price, quantity); const product = data.products[0];
+        const validDays = Number(value('validDays'));
+        if (!Number.isSafeInteger(validDays) || validDays < 1 || validDays > 365) throw new Error('Template validity must be between 1 and 365 days.');
+        const product = data.products.find((item) => item.id === value('templateProductId'));
+        const template: WorkspaceData['quoteTemplates'][number] = {
+          id, name: value('name').trim(), validDays, planId: plan.id,
+          lines: [
+            { productId: '', name: plan.name, quantity, unitPrice: plan.price, taxRate: percentageString(plan.taxRateBps) },
+            ...(product ? [{ productId: product.id, name: product.name, quantity: 1, unitPrice: product.price, taxRate: percentageString(product.taxRateBps) }] : []),
+          ],
+        };
+        return await commit('/quotation-templates', { name: template.name, validDays, planId: plan.id, productId: product?.id, quantity }, (response) => patch('quoteTemplates', (items) => [...items, { ...template, id: responseId(response, id) }]));
+      }
+      if (kind === 'quotation' || kind === 'subscription') {
+        const customerId = value('customerId');
+        const template = kind === 'quotation' ? data.quoteTemplates.find((item) => item.id === value('templateId')) : undefined;
+        const plan = data.plans.find((item) => item.id === (template?.planId || value('planId'))) ?? data.plans[0];
+        if (!plan || !customerId) throw new Error('Choose a customer and plan.');
+        const quantity = Number(template?.lines.find((line) => !line.productId)?.quantity ?? value('quantity'));
+        if (!Number.isSafeInteger(quantity) || quantity < plan.minimumQuantity) throw new Error(`${plan.name} requires a minimum quantity of ${plan.minimumQuantity}.`);
+        const product = data.products[0];
         if (kind === 'quotation') {
-          const quote = { id, number: `QUO-2026-${String(data.quotations.length + 15).padStart(3, '0')}`, customerId, title: value('title').trim() || `${plan.name} · ${quantity} ${quantity === 1 ? 'seat' : 'seats'}`, date: new Date().toISOString().slice(0, 10), validUntil: new Date(Date.now() + Number(value('validDays')) * 86400000).toISOString().slice(0, 10), amount, status: 'Draft' };
-          const quoteLines = [{ productId: product?.id ?? '', name: plan.name, quantity, unitPrice: plan.price, taxRate: percentageString(plan.taxRateBps) }];
-          const body = { customerId, planId: plan.id, title: quote.title, validDays: Number(value('validDays')), quantity, lines: quoteLines };
+          const validDays = template?.validDays ?? Number(value('validDays'));
+          const templateAmount = template?.lines.reduce((sum, line) => addMoney(sum, multiplyMoney(line.unitPrice, line.quantity)), '0.00');
+          const amount = templateAmount ?? multiplyMoney(plan.price, quantity);
+          const quote = { id, number: `QUO-2026-${String(data.quotations.length + 15).padStart(3, '0')}`, customerId, title: value('title').trim() || `${template?.name ?? plan.name} · ${template ? 'offer' : `${quantity} ${quantity === 1 ? 'seat' : 'seats'}`}`, date: new Date().toISOString().slice(0, 10), validUntil: new Date(Date.now() + validDays * 86400000).toISOString().slice(0, 10), amount, status: 'Draft' };
+          const quoteLines = template ? undefined : [{ productId: product?.id ?? '', name: plan.name, quantity, unitPrice: plan.price, taxRate: percentageString(plan.taxRateBps) }];
+          const body = { customerId, planId: plan.id, title: quote.title, validDays, quantity, templateId: template?.id, lines: quoteLines };
           return await commit('/quotations', body, (response) => patch('quotations', (items) => [...items, { ...quote, id: responseId(response, id) }]));
         }
+        const amount = multiplyMoney(plan.price, quantity);
         const subscription = { id, number: `SUB-${1049 + data.subscriptions.length}`, customerId, planId: plan.id, status: 'Draft' as const, startedAt: value('availableFrom'), renewsAt: value('availableUntil'), amount, seats: quantity, paymentTerms: value('paymentTerms') === '0' ? 'Due on receipt' : `Net ${value('paymentTerms')}` };
         const body = { customerId, planId: plan.id, startDate: subscription.startedAt, expiryDate: subscription.renewsAt || undefined, paymentTermsDays: Number(value('paymentTerms')), lines: product ? [{ productId: product.id, name: product.name, quantity, unitPrice: plan.price, taxRate: percentageString(plan.taxRateBps) }] : [] };
         return await commit('/subscriptions', body, (response) => patch('subscriptions', (items) => [...items, { ...subscription, id: responseId(response, id) }]));
@@ -671,7 +696,7 @@ export default function App() {
     {mobileNavOpen && <button type="button" className="nav-scrim" aria-label="Close navigation" onClick={() => setMobileNavOpen(false)} />}
     <div className="main-shell">
       <header className="topbar"><div className="topbar-left"><button ref={mobileMenuButtonRef} type="button" className="icon-button mobile-menu-button" aria-label="Open navigation" aria-expanded={mobileNavOpen} aria-controls="orca-sidebar" onClick={() => setMobileNavOpen(true)}><Icon name="menu" size={18} /></button><div className="breadcrumb"><span>{profile.businessName}</span><Icon name="chevron" size={14} /><strong>{pageTitles[route.page]}</strong></div></div><div className="topbar-actions"><label className="global-search"><Icon name="search" size={16} /><span className="sr-only">Search the current page</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search anything…" /><kbd>⌘ K</kbd></label><Badge tone={apiTone}>{apiLabel}</Badge><div className="topbar-divider" /><IconButton icon="bell" label="Open Copilot approvals" onClick={() => navigate('copilot')} /><div className="top-avatar"><Avatar initials={userInitials} size="sm" /></div><div className="new-menu-wrap"><Button variant="primary" size="sm" icon="plus" onClick={() => setNewMenuOpen(!newMenuOpen)}>New</Button>{newMenuOpen && <div className="new-menu">{(['customer', 'product', 'plan', 'quotation', 'subscription'] as const).map((kind) => <button type="button" key={kind} onClick={() => { setNewMenuOpen(false); create(kind); }}>{`New ${kind}`}</button>)}</div>}</div></div></header>
-      <main className="page-content"><div className="content-wrap">{page}</div><footer className="app-footer"><span>ORCA · Billing workspace</span><span>Private workspace · INR</span></footer></main>
+      <main className="page-content"><div className="content-wrap">{page}</div></main>
     </div>
     {recordDialog && <CreateRecordDialog kind={recordDialog} data={data} onClose={() => setRecordDialog(null)} onSave={(values) => saveRecord(recordDialog, values)} />}
     {paymentInvoice && <PaymentDialog invoice={paymentInvoice} customer={data.customers.find((customer) => customer.id === paymentInvoice.customerId)?.company ?? 'Customer'} onClose={() => setPaymentInvoice(null)} onSave={(values) => savePayment(paymentInvoice, values)} />}

@@ -166,6 +166,26 @@ function quotationFromApi(value: unknown) {
   };
 }
 
+function quoteTemplateFromApi(value: unknown) {
+  const template = asRecord(value);
+  return {
+    id: String(template.id ?? crypto.randomUUID()),
+    name: String(template.name ?? 'Quotation template'),
+    validDays: Math.max(1, Number(template.validDays ?? 30)),
+    planId: String(template.planId ?? ''),
+    lines: (Array.isArray(template.lines) ? template.lines : []).map((rawLine) => {
+      const line = asRecord(rawLine);
+      return {
+        productId: String(line.productId ?? ''),
+        name: String(line.name ?? 'Template line'),
+        quantity: Math.max(1, Number(line.quantity ?? 1)),
+        unitPrice: asExactDecimal(line.unitPrice ?? '0'),
+        taxRate: String(line.taxRate ?? '0'),
+      };
+    }),
+  };
+}
+
 function paymentFromApi(value: unknown) {
   const p = asRecord(value);
   return {
@@ -263,14 +283,15 @@ export function useWorkspace() {
         }
         return;
       }
-      const [products, plans, customers, subscriptions, invoices, quotations, payments, discounts, taxes, staff, exports, approvals] = await Promise.all([
+      const [products, plans, customers, subscriptions, invoices, quotations, quoteTemplates, payments, discounts, taxes, staff, exports, approvals] = await Promise.all([
         readItemsResult<unknown>('/products'), readItemsResult<unknown>('/plans'), readItemsResult<unknown>('/customers'),
         readItemsResult<unknown>('/subscriptions'), readItemsResult<unknown>('/invoices'), readItemsResult<unknown>('/quotations'),
+        readItemsResult<unknown>('/quotation-templates'),
         readItemsResult<unknown>('/payments'), readItemsResult<unknown>('/discounts'), readItemsResult<unknown>('/taxes'),
         readItemsResult<unknown>('/staff'), readItemsResult<unknown>('/exports'), readItemsResult<unknown>('/agent/approvals'),
       ]);
       if (!mounted) return;
-      const results = [products, plans, customers, subscriptions, invoices, quotations, payments, discounts, taxes, staff, exports, approvals];
+      const results = [products, plans, customers, subscriptions, invoices, quotations, quoteTemplates, payments, discounts, taxes, staff, exports, approvals];
       if (results.some((result) => result.status === 401)) {
         setData(emptyWorkspaceData());
         setDataMode('auth-required');
@@ -294,6 +315,7 @@ export function useWorkspace() {
           subscriptions: rows(subscriptions).map(subscriptionFromApi),
           invoices: rows(invoices).map(invoiceFromApi),
           quotations: rows(quotations).map(quotationFromApi),
+          quoteTemplates: rows(quoteTemplates).map(quoteTemplateFromApi),
           payments: rows(payments).map(paymentFromApi),
           discounts: rows(discounts).map(discountFromApi),
           taxes: rows(taxes).map(taxFromApi),

@@ -62,3 +62,11 @@
 - **Research:** linked official Stripe subscription/proration/invoice-preview references and PostgreSQL locking/constraint references. The product differentiation is framed as inspectable billing evidence and operational integrity, not a claim that ORCA has more features than established platforms.
 - **Verification:** manual content/claim review and `git diff --check` passed. No application behavior changed.
 - **Deferred:** Vercel rewrite configuration and VPS setup are scheduled for the later hosting phase requested by the owner.
+
+## 2026-10-31 — Reusable quotation templates and cleaner auth screens
+
+- Added tenant-scoped create/list endpoints for quotation templates. Templates snapshot one plan line and an optional product line with quantities, exact decimal-string prices, tax rates, and validity days; the schema stores the plan reference with a composite business constraint.
+- Added a Quotations-page template list, create form, and “start from a saved template” flow. A created quotation inherits the selected template's plan, title, lines, and default validity. Added API contract and in-memory plus isolated PostgreSQL coverage through migration 008.
+- Removed generic session-security and copyright/workspace footer text from the sign-in and signed-in screens at the user's request.
+- **Verification:** `make verify` passed. The local PostgreSQL browser flow created and reloaded a plan/product template, then created a ₹1,250 quotation from it. Desktop (1440×900) and mobile (390×844) had no horizontal overflow; Axe reported zero violations after the mobile drawer settled.
+- **Known limits:** template edit/delete are not implemented. The browser Axe run does not replace manual verification of every color pairing; avatar and amber status contrast remain in the broader visual review.
