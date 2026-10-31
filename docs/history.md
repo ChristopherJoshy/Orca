@@ -120,3 +120,9 @@
 - Added an API test proving an authenticated customer can pause and resume their own subscription, with an open pause interval created and then closed on resume. The endpoint continues to enforce customer ownership and plan permission.
 - **Verification:** focused Go route test passed; `make verify` and `git diff --check` passed.
 - **Known limits:** customer self-service remains limited to pause/resume; broader lifecycle policy coverage remains open.
+
+## 2026-10-31 — Posted receivables and partial payments
+
+- Corrected finance summaries to exclude Draft and Cancelled invoices from invoiced totals and receivables; overdue counts only confirmed invoices with a remaining past-due balance.
+- Added an HTTP flow covering partial allocation (invoice stays Confirmed), final settlement (Paid), and the resulting receivable/overdue totals while unrelated Draft and Cancelled invoices remain excluded.
+- **Verification:** focused Go test and `make verify` passed; `git diff --check` passed.

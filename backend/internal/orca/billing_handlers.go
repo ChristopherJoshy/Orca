@@ -714,6 +714,11 @@ func (a *API) reportSummary(w http.ResponseWriter, r *http.Request, auth Authent
 			}
 		}
 		for _, v := range st.Invoices {
+			// Drafts are not posted receivables, and cancelled documents must
+			// not inflate the invoiced totals after their reversal.
+			if v.Status != "Confirmed" && v.Status != "Paid" {
+				continue
+			}
 			total, _ := ParseDecimal(v.Total)
 			out, _ := ParseDecimal(v.Outstanding)
 			invoiced = invoiced.Add(total)

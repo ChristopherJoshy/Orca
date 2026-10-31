@@ -27,6 +27,8 @@ Discount eligibility is evaluated at the invoice transaction time against the ef
 
 Workflow state: `Draft -> Confirmed -> Paid`; cancellation is an explicit void/cancel action with audit and any required reversal. Balance is separate: `open_amount = total - allocated_payments - credits`. A confirmed invoice can be partially paid while remaining `Confirmed`; overdue is a computed predicate (`open_amount > 0 && due_at < now`). `Paid` requires zero open amount. Confirm/cancel and payment allocation are idempotent.
 
+Finance summaries count only `Confirmed` and `Paid` documents as invoiced receivables. Draft and cancelled invoices do not contribute to posted invoice totals or outstanding balances; overdue counts only confirmed invoices with a positive balance past due.
+
 Confirmed invoice data is immutable. A correction after finalization uses a credit/reversal or debit adjustment with its own linked snapshot and journal. Draft changes create a new calculation snapshot revision and preserve audit history.
 
 ## Double-entry journal
