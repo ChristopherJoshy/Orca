@@ -261,3 +261,9 @@
 - Reviewed Groq's current official model and tool-use documentation. Set GPT-OSS 20B as the default: the production catalog lists about 1,000 tokens/second, 131,072 context, and function calling. ORCA invokes tools serially, so the model's lack of parallel tool calls does not constrain the current implementation. GPT-OSS 120B remains configurable for workflows that favor its stronger reasoning over latency.
 - Updated backend defaults, local/VPS environment templates, README setup guidance, and model-selection documentation. The real local `.env` model setting was changed without reading or modifying its credential.
 - **Verification:** Go tests (including an explicit default-model test) and `go vet` passed. An authenticated Groq call from both the workstation environment and VPS was blocked by Cloudflare HTTP 403 error 1010; no live model call or end-to-end Copilot result is claimed.
+
+## 2026-10-31 — Release Copilot and Invoice Truth presentation fixes
+
+- Pushed Copilot chat and Invoice Truth fix `6011f21`, then model-selection update `3b1455a`. Vercel reported the production deployment Ready.
+- Built and installed the Linux Go API from `3b1455a` on the owner-approved VPS, set only `GROQ_MODEL=openai/gpt-oss-20b` in the private environment file, and restarted `orca-api.service`.
+- **Verification:** systemd reports active; direct loopback health and the Vercel same-origin `/api/v1/health` return HTTP 200 with PostgreSQL `ok`. Production browser inspection reached sign-in but was not authenticated. Authenticated Groq model/tool requests from the VPS return Cloudflare HTTP 403 error 1010, so live Copilot answers remain blocked and unverified.
