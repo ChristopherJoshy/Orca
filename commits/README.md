@@ -26,3 +26,4 @@ Each implementation commit has a consecutively numbered Markdown record. The com
 - [0021 — Deploy the Vercel frontend and VPS API](0021-vercel-vps-deployment.md)
 - [0022 — Fail closed when email delivery is unavailable](0022-email-provider-gates.md)
 - [0023 — Publish the public ORCA landing page](0023-public-landing-page.md)
+- [0024 — Verify the public homepage production release](0024-live-public-landing-release.md)

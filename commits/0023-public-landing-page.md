@@ -21,5 +21,5 @@ Added an elegant public home page for signed-out visitors, based on the supplied
 
 ## Limitations
 
-- The landing page still needs the canonical Vercel deployment check after this commit is pushed.
+- The post-push canonical deployment and live browser checks are recorded in [commit record 0024](0024-live-public-landing-release.md).
 - Production account creation remains unavailable until a verified Resend sender and key are configured; the API rejects signup before writing an unverified account.

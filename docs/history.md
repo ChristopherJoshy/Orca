@@ -1,11 +1,18 @@
 # Change history and verification
 
+## 2026-10-31 — Publish the public homepage to canonical Vercel
+
+- Pushed landing-page commit `153beb5` to `main`; the canonical `orca` project deployed it to production and reached `READY` at [orca-orcin.vercel.app](https://orca-orcin.vercel.app).
+- Verified the live homepage, same-origin API health (`database: postgres`, `status: ok`), and OAuth authorization-server discovery all returned HTTP 200. Production browser inspection confirmed the page, create-workspace navigation, return-to-home link, and zero Axe violations or incomplete checks. The signup form was opened but not submitted.
+- Confirmed the Vercel account inventory contains one ORCA project (`orca`); unrelated projects belong to separate products and were left intact.
+- **Remaining limit:** production signup is unavailable because no Resend sender/API key is configured. A prior signup probe returned 503 and left zero user rows; no production account or demo records were created.
+
 ## 2026-10-31 — Public product landing page and Vercel project cleanup
 
 - Replaced the signed-out root screen with a public ORCA home page inspired by spacious, typography-led infrastructure sites. The page explains recurring billing, Invoice Truth, Billing Control Tower, and the Copilot using real product behavior, with direct sign-in and workspace creation and no demo CTA, invented customer logos, or unsupported metrics.
 - Kept protected routes and auth links available; added responsive navigation and an original billing-cycle illustration.
 - Removed three unused Vercel projects connected to the same repository (`orca-wich`, `chrisorca`, and `frontend-bwk1`) after identifying their mismatched build settings. Preserved the canonical `orca` project and its `orca-orcin.vercel.app` domain.
-- **Verification:** frontend typecheck/lint and production build passed with the canonical HTTPS origin. `agent-browser` reviewed desktop (1440×1000) and mobile (390×844); sign-up and return-home navigation worked, mobile width matched the viewport, and Axe reported zero violations and zero incomplete checks. The canonical pre-change Vercel deployment, same-origin API health, and OAuth discovery returned HTTP 200. Landing-page deployment is pending the reviewed push.
+- **Local verification:** frontend typecheck/lint and production build passed with the canonical HTTPS origin. `agent-browser` reviewed desktop (1440×1000) and mobile (390×844); sign-up and return-home navigation worked, mobile width matched the viewport, and Axe reported zero violations and zero incomplete checks. The subsequent production deployment and live checks are recorded above.
 - **Known limit:** live signup still requires a configured Resend sender; the production API returns 503 before creating an account when email delivery is unavailable.
 
 ## 2026-10-31 — Honest email limits and production signup guard
@@ -13,7 +20,7 @@
 - Added an ORCA-styled dialog for invoice and quotation send actions, signup, customer access, password reset, and provider settings when email is unavailable. It explains that this build did not fund automatic email and confirms that nothing was sent or queued and no document/account state changed.
 - Added backend configuration checks for signup, customer signup, password reset, invoice/quotation sends, and Copilot email proposals/approvals. Without both Resend credentials and a sender, production requests return 503 before creating an unusable account, token, document transition, approval, or outbox event.
 - Updated README, OpenAPI, integration, agent, deployment, and acceptance documentation to reflect actual behavior.
-- **Verification:** `ORCA_PUBLIC_URL=https://orca-orcin.vercel.app VERCEL_ENV=production make verify` passed (Go tests, race detector, `go vet`, frontend typecheck/lint, and production build). OpenAPI YAML parsing and `git diff --check` passed. Production API signup, database non-mutation, and final hosted deployment are pending this change's release check.
+- **Verification:** `ORCA_PUBLIC_URL=https://orca-orcin.vercel.app VERCEL_ENV=production make verify` passed (Go tests, race detector, `go vet`, frontend typecheck/lint, and production build). OpenAPI YAML parsing and `git diff --check` passed. A production signup probe later returned 503 before any database writes because email delivery is unconfigured; release and database non-mutation evidence is recorded in the leading entry.
 - **Known limit:** signup, customer portal linking, and password recovery need a configured verified sender. No test account was created in production without a deliverable verification link.
 
 ## 2026-10-31 — Requirements, application foundation, and local workflow
