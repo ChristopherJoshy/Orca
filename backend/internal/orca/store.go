@@ -247,6 +247,16 @@ func stateForBusiness(source *State, businessID string) (*State, error) {
 			out.Allocations[key] = value
 		}
 	}
+	for id, value := range source.StripeCheckouts {
+		if value.BusinessID == businessID {
+			out.StripeCheckouts[id] = value
+		}
+	}
+	for id, value := range source.StripeReconciliations {
+		if value.BusinessID == businessID {
+			out.StripeReconciliations[id] = value
+		}
+	}
 	for _, value := range source.Journal {
 		if value.BusinessID == businessID {
 			out.Journal = append(out.Journal, value)
@@ -297,6 +307,9 @@ func stateForBusiness(source *State, businessID string) (*State, error) {
 			out.ResetTokens[key] = value
 		}
 	}
+	for key, value := range source.WebhookIDs {
+		out.WebhookIDs[key] = value
+	}
 	return out, nil
 }
 
@@ -328,6 +341,8 @@ func mergeBusinessState(all, scoped *State, businessID string) {
 	mergeByBusiness(all.Invoices, scoped.Invoices, businessID, func(v Invoice) string { return v.BusinessID })
 	mergeByBusiness(all.Payments, scoped.Payments, businessID, func(v Payment) string { return v.BusinessID })
 	mergeByBusiness(all.Allocations, scoped.Allocations, businessID, func(v PaymentAllocation) string { return v.BusinessID })
+	mergeByBusiness(all.StripeCheckouts, scoped.StripeCheckouts, businessID, func(v StripeCheckout) string { return v.BusinessID })
+	mergeByBusiness(all.StripeReconciliations, scoped.StripeReconciliations, businessID, func(v StripeReconciliation) string { return v.BusinessID })
 	mergeByBusiness(all.Approvals, scoped.Approvals, businessID, func(v Approval) string { return v.BusinessID })
 	mergeByBusiness(all.Sessions, scoped.Sessions, businessID, func(v Session) string { return v.BusinessID })
 	mergeByBusiness(all.AgentRuns, scoped.AgentRuns, businessID, func(v AgentRun) string { return v.BusinessID })
@@ -341,6 +356,11 @@ func mergeBusinessState(all, scoped *State, businessID string) {
 	}
 	for key, value := range scoped.ResetTokens {
 		all.ResetTokens[key] = value
+	}
+	for key, value := range scoped.WebhookIDs {
+		if value {
+			all.WebhookIDs[key] = true
+		}
 	}
 }
 
@@ -421,6 +441,12 @@ func normalizeState(s *State) {
 	}
 	if s.Allocations == nil {
 		s.Allocations = map[string]PaymentAllocation{}
+	}
+	if s.StripeCheckouts == nil {
+		s.StripeCheckouts = map[string]StripeCheckout{}
+	}
+	if s.StripeReconciliations == nil {
+		s.StripeReconciliations = map[string]StripeReconciliation{}
 	}
 	if s.Approvals == nil {
 		s.Approvals = map[string]Approval{}

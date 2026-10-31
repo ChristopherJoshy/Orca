@@ -38,3 +38,11 @@
 - **Correction:** the default line is now plan-backed and leaves `productId` empty; quotation defaults use the same rule.
 - **Regression evidence:** the isolated-schema PostgreSQL HTTP flow now creates a plan-only subscription and asserts its default line is present.
 - **Prevention:** keep plan and product identifiers distinct and test optional-line defaults through the database handler.
+
+## 2026-10-31 — Responsive billing layout clipped data and missed contrast checks
+
+- **Observed:** the Billing Control Tower count was forced into an 18×18px box, so the count and label stacked; the mobile dashboard invoice table exceeded the viewport and clipped status/amount; several small labels were below WCAG AA contrast; closed mobile navigation remained in the accessibility tree; and three action columns had unnamed table headers.
+- **Cause:** the dashboard styles assumed a desktop text layout, secondary invoice columns were not hidden at narrow widths, muted colors were reused on tinted fills without measuring the pair, and the navigation state was only visual.
+- **Correction:** made the pipeline summary responsive, hid secondary invoice columns on mobile while keeping status and amount visible, darkened text for measured contrast, gave the mobile drawer explicit `aria-hidden`/`inert` state and Escape/focus-return behavior, and labeled action headers. The Reports toolbar now stacks at mobile width and each report tab displays a distinct summary.
+- **Regression evidence:** `agent-browser` measured no horizontal overflow at 1440×900, 834×1112, and 390×844; dashboard Axe scans reported zero violations at each width. Desktop Axe scans across the main business routes, invoice detail, settings sections, and customer portal reported zero violations. Mobile navigation open/close and report tab/date-filter behavior were exercised.
+- **Prevention:** inspect real rendered layouts at desktop/tablet/mobile, run Axe on representative routes, measure actual foreground/background pairs, and give every action column an accessible header.

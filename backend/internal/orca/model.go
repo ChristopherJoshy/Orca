@@ -1,6 +1,9 @@
 package orca
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 const (
 	CurrencyINR   = "INR"
@@ -250,6 +253,39 @@ type PaymentAllocation struct {
 	CreatedAt  time.Time `json:"createdAt"`
 }
 
+// StripeCheckout binds a provider session to one ORCA invoice and immutable
+// amount. It is persisted before the network call so retries reuse the same
+// idempotency key and webhook reconciliation has a trusted local reference.
+type StripeCheckout struct {
+	ID                string     `json:"id"`
+	BusinessID        string     `json:"businessId"`
+	InvoiceID         string     `json:"invoiceId"`
+	CustomerID        string     `json:"customerId"`
+	Amount            string     `json:"amount"`
+	Currency          string     `json:"currency"`
+	IdempotencyKey    string     `json:"idempotencyKey"`
+	ProviderSessionID string     `json:"providerSessionId,omitempty"`
+	URL               string     `json:"url,omitempty"`
+	Status            string     `json:"status"`
+	ExpiresAt         *time.Time `json:"expiresAt,omitempty"`
+	CreatedAt         time.Time  `json:"createdAt"`
+	UpdatedAt         time.Time  `json:"updatedAt"`
+}
+
+// StripeReconciliation is a durable system-level outbox item for successful
+// provider sessions that cannot safely be applied to an ORCA receivable.
+type StripeReconciliation struct {
+	ID              string          `json:"id"`
+	ProviderEventID string          `json:"providerEventId"`
+	EventType       string          `json:"eventType"`
+	SessionID       string          `json:"sessionId"`
+	CheckoutID      string          `json:"checkoutId,omitempty"`
+	BusinessID      string          `json:"businessId,omitempty"`
+	Reason          string          `json:"reason"`
+	Payload         json.RawMessage `json:"payload"`
+	CreatedAt       time.Time       `json:"createdAt"`
+}
+
 type JournalEntry struct {
 	ID           string    `json:"id"`
 	BusinessID   string    `json:"businessId"`
@@ -360,31 +396,33 @@ type Actor struct {
 }
 
 type State struct {
-	Users              map[string]User              `json:"users"`
-	Businesses         map[string]Business          `json:"businesses"`
-	Memberships        map[string]Membership        `json:"memberships"`
-	Customers          map[string]Customer          `json:"customers"`
-	Products           map[string]Product           `json:"products"`
-	Plans              map[string]Plan              `json:"plans"`
-	Discounts          map[string]Discount          `json:"discounts"`
-	QuoteTemplates     map[string]QuoteTemplate     `json:"quoteTemplates"`
-	Quotations         map[string]Quotation         `json:"quotations"`
-	Taxes              map[string]TaxRule           `json:"taxes"`
-	Subscriptions      map[string]Subscription      `json:"subscriptions"`
-	Invoices           map[string]Invoice           `json:"invoices"`
-	Payments           map[string]Payment           `json:"payments"`
-	Allocations        map[string]PaymentAllocation `json:"allocations"`
-	Journal            []JournalEntry               `json:"journal"`
-	Approvals          map[string]Approval          `json:"approvals"`
-	Sessions           map[string]Session           `json:"sessions"`
-	Audit              []AuditEvent                 `json:"audit"`
-	Outbox             []OutboxEvent                `json:"outbox"`
-	AgentRuns          map[string]AgentRun          `json:"agentRuns"`
-	OAuthGrants        map[string]OAuthGrant        `json:"oauthGrants"`
-	Exports            map[string]ExportJob         `json:"exports"`
-	WebhookIDs         map[string]bool              `json:"webhookIDs"`
-	EmailVerifications map[string]AuthToken         `json:"emailVerifications"`
-	ResetTokens        map[string]AuthToken         `json:"resetTokens"`
+	Users                 map[string]User                 `json:"users"`
+	Businesses            map[string]Business             `json:"businesses"`
+	Memberships           map[string]Membership           `json:"memberships"`
+	Customers             map[string]Customer             `json:"customers"`
+	Products              map[string]Product              `json:"products"`
+	Plans                 map[string]Plan                 `json:"plans"`
+	Discounts             map[string]Discount             `json:"discounts"`
+	QuoteTemplates        map[string]QuoteTemplate        `json:"quoteTemplates"`
+	Quotations            map[string]Quotation            `json:"quotations"`
+	Taxes                 map[string]TaxRule              `json:"taxes"`
+	Subscriptions         map[string]Subscription         `json:"subscriptions"`
+	Invoices              map[string]Invoice              `json:"invoices"`
+	Payments              map[string]Payment              `json:"payments"`
+	Allocations           map[string]PaymentAllocation    `json:"allocations"`
+	StripeCheckouts       map[string]StripeCheckout       `json:"stripeCheckouts"`
+	StripeReconciliations map[string]StripeReconciliation `json:"stripeReconciliations"`
+	Journal               []JournalEntry                  `json:"journal"`
+	Approvals             map[string]Approval             `json:"approvals"`
+	Sessions              map[string]Session              `json:"sessions"`
+	Audit                 []AuditEvent                    `json:"audit"`
+	Outbox                []OutboxEvent                   `json:"outbox"`
+	AgentRuns             map[string]AgentRun             `json:"agentRuns"`
+	OAuthGrants           map[string]OAuthGrant           `json:"oauthGrants"`
+	Exports               map[string]ExportJob            `json:"exports"`
+	WebhookIDs            map[string]bool                 `json:"webhookIDs"`
+	EmailVerifications    map[string]AuthToken            `json:"emailVerifications"`
+	ResetTokens           map[string]AuthToken            `json:"resetTokens"`
 }
 
 type AuthToken struct {
@@ -398,7 +436,7 @@ func NewState() *State {
 		Customers: map[string]Customer{}, Products: map[string]Product{}, Plans: map[string]Plan{},
 		Discounts: map[string]Discount{}, QuoteTemplates: map[string]QuoteTemplate{}, Subscriptions: map[string]Subscription{},
 		Quotations: map[string]Quotation{}, Taxes: map[string]TaxRule{},
-		Invoices: map[string]Invoice{}, Payments: map[string]Payment{}, Allocations: map[string]PaymentAllocation{}, Approvals: map[string]Approval{}, Sessions: map[string]Session{},
+		Invoices: map[string]Invoice{}, Payments: map[string]Payment{}, Allocations: map[string]PaymentAllocation{}, StripeCheckouts: map[string]StripeCheckout{}, StripeReconciliations: map[string]StripeReconciliation{}, Approvals: map[string]Approval{}, Sessions: map[string]Session{},
 		AgentRuns: map[string]AgentRun{}, OAuthGrants: map[string]OAuthGrant{}, Exports: map[string]ExportJob{},
 		WebhookIDs: map[string]bool{}, EmailVerifications: map[string]AuthToken{}, ResetTokens: map[string]AuthToken{},
 	}

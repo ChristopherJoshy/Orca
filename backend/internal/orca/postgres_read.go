@@ -401,6 +401,44 @@ func loadState(ctx context.Context, q pgQueryer, businessID string) (*State, err
 		s.Invoices[id] = inv
 	}
 
+	query, args = tenantQuery("SELECT id::text,business_id::text,invoice_id::text,customer_id::text,amount::text,currency,idempotency_key,COALESCE(provider_session_id,''),checkout_url,status,expires_at,created_at,updated_at FROM stripe_checkouts", businessID)
+	rows, err = q.Query(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	for rows.Next() {
+		var v StripeCheckout
+		if err := rows.Scan(&v.ID, &v.BusinessID, &v.InvoiceID, &v.CustomerID, &v.Amount, &v.Currency, &v.IdempotencyKey, &v.ProviderSessionID, &v.URL, &v.Status, &v.ExpiresAt, &v.CreatedAt, &v.UpdatedAt); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		s.StripeCheckouts[v.ID] = v
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return nil, err
+	}
+	rows.Close()
+
+	query, args = tenantQuery("SELECT id::text,provider_event_id,event_type,session_id,COALESCE(checkout_id::text,''),COALESCE(business_id::text,''),reason,payload,created_at FROM stripe_reconciliation_outbox", businessID)
+	rows, err = q.Query(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	for rows.Next() {
+		var v StripeReconciliation
+		if err := rows.Scan(&v.ID, &v.ProviderEventID, &v.EventType, &v.SessionID, &v.CheckoutID, &v.BusinessID, &v.Reason, &v.Payload, &v.CreatedAt); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		s.StripeReconciliations[v.ProviderEventID] = v
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return nil, err
+	}
+	rows.Close()
+
 	query, args = tenantQuery("SELECT id::text,business_id::text,operation_key,source_type,source_id::text,account,debit::text,credit::text,currency,created_at FROM journal_entries", businessID)
 	rows, err = q.Query(ctx, query, args...)
 	if err != nil {

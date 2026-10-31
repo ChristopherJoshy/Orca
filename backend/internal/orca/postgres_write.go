@@ -246,6 +246,23 @@ func persistStateDiff(ctx context.Context, tx pgx.Tx, before, after *State) erro
 			return err
 		}
 	}
+	for _, v := range after.StripeCheckouts {
+		old, ok := before.StripeCheckouts[v.ID]
+		if ok && reflect.DeepEqual(old, v) {
+			continue
+		}
+		if _, err := tx.Exec(ctx, "INSERT INTO stripe_checkouts(id,business_id,invoice_id,customer_id,amount,currency,idempotency_key,provider_session_id,checkout_url,status,expires_at,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,NULLIF($8,''),$9,$10,$11,$12,$13) ON CONFLICT (id) DO UPDATE SET provider_session_id=NULLIF(EXCLUDED.provider_session_id,''),checkout_url=EXCLUDED.checkout_url,status=EXCLUDED.status,expires_at=EXCLUDED.expires_at,updated_at=EXCLUDED.updated_at", v.ID, v.BusinessID, v.InvoiceID, v.CustomerID, v.Amount, v.Currency, v.IdempotencyKey, v.ProviderSessionID, v.URL, v.Status, v.ExpiresAt, v.CreatedAt, v.UpdatedAt); err != nil {
+			return err
+		}
+	}
+	for _, v := range after.StripeReconciliations {
+		if _, ok := before.StripeReconciliations[v.ProviderEventID]; ok {
+			continue
+		}
+		if _, err := tx.Exec(ctx, "INSERT INTO stripe_reconciliation_outbox(id,provider_event_id,event_type,session_id,checkout_id,business_id,reason,payload,created_at) VALUES ($1,$2,$3,$4,NULLIF($5,'')::uuid,NULLIF($6,'')::uuid,$7,$8::jsonb,$9) ON CONFLICT (provider_event_id) DO NOTHING", v.ID, v.ProviderEventID, v.EventType, v.SessionID, v.CheckoutID, v.BusinessID, v.Reason, string(v.Payload), v.CreatedAt); err != nil {
+			return err
+		}
+	}
 	for _, v := range after.Journal {
 		if containsJournal(before.Journal, v) {
 			continue

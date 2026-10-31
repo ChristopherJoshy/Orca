@@ -15,8 +15,8 @@ This matrix joins the source subscription-management brief with the expanded ORC
 | INV-2 | No skipped/duplicate periods; catch-up after downtime | Calendar anchor tests and PostgreSQL period uniqueness test pass; durable worker, crash/restart, and multi-worker catch-up acceptance remain open. | Partial |
 | DISC-1 | Admin-only fixed/percentage discounts, dates, threshold, usage cap, target scope | Fixed-discount pennies, threshold logic, and atomic transaction paths exist; concurrency, failed-attempt, date, and all scope cases need acceptance coverage. | Partial |
 | PAY-1 | Record manual payments and allocations; partial/outstanding/overdue views | Idempotent manual payment, balance update, journal, full-payment flow, and report integrity exercised; partial-payment and overdue report cases remain open. | Partial |
-| PAY-2 | Stripe checkout and verified idempotent webhook handling | Webhook signature verification and event deduplication scaffold exists. Checkout and event-to-payment reconciliation are not implemented. | Pending |
-| REP-1 | Filtered active subscriptions, recurring revenue, invoice, collection, receivable and overdue reports | Summary aggregates and journal/hash integrity values exist; selectable filters and full report acceptance remain open. | Partial |
+| PAY-2 | Stripe checkout and verified idempotent webhook handling | Customer-owned confirmed INR invoice checkout derives the amount server-side, persists a stable attempt, and accepts test-mode keys only. Signed webhook tests cover payment posting, duplicate/out-of-order events, amount mismatches, unmatched reconciliation, retry, and ownership. Clean-schema PostgreSQL tests include migrations 006–007; no live Stripe sandbox session has been run. | Partial |
+| REP-1 | Filtered active subscriptions, recurring revenue, invoice, collection, receivable and overdue reports | Reports provide Revenue, Invoicing, Collections, and Receivables summaries with All time/This month/This quarter/This year filters; invoice metrics use issue date, collections use payment date, and receivables separate overdue from not-yet-due balances. Server-side filter validation, exportable report data, and full report acceptance remain open. | Partial |
 | FIN-1 | INR exact decimal math, discounts before tax, half-up line rounding | Decimal, half-up, fixed-discount allocation, and tax tests exist; complete boundary/property coverage remains open. | Partial |
 | FIN-2 | Immutable calculation snapshot, engine version, explanation, canonical hash | Local workflow verified persisted engine version, explanation and hash; finalized-record mutation and canonical reproducibility tests remain open. | Partial |
 | FIN-3 | Transactional invoice, balanced journal, audit/outbox and idempotency | Transactional PostgreSQL writes, balanced journal checks, audit/outbox insertion, invoice hash check, and payment idempotency exist; rollback/failure-injection coverage remains open. | Partial |
@@ -29,9 +29,9 @@ This matrix joins the source subscription-management brief with the expanded ORC
 | EXP-2 | JSON preserves data; CSV formula injection neutralized | JSON is lossless; CSV formula/control-prefix escaping has focused adversarial tests. | Partial |
 | MCP-1 | Streamable HTTP MCP, OAuth discovery/PKCE/scoped grants/expiry/revoke | Official Go SDK Streamable HTTP server, discovery, DCR, S256 PKCE consent, scoped hashed one-hour grants, membership checks, and revocation are tested. DCR/code state is process-local; there are no refresh tokens or third-party client certification. | Partial |
 | MCP-2 | External clients can read and propose only; execution needs approval | Scoped search/explanation/report/simulation and proposal tools are implemented. MCP cannot execute mutations directly; ORCA approval executes supported actions after server-side checks. Export-request tool and broad action coverage remain open. | Partial |
-| UX-1 | Accessible light responsive experience for desktop/tablet/mobile and keyboard | Responsive UI and semantic controls are implemented; browser and accessibility walkthrough was unavailable in this environment. | Partial |
+| UX-1 | Accessible light responsive experience for desktop/tablet/mobile and keyboard | `agent-browser` inspected all 17 application routes at 1440×900, 834×1112, and 390×844; all route/viewport scans reported zero Axe violations and no horizontal overflow. Report tabs and date filters were exercised. Mobile drawer state, Escape close, and focus return were checked. Full role-based workflow and keyboard-only acceptance remains open. | Partial |
 | PERF-1 | Ordinary pages under two seconds with thousands of records | No repeatable seeded-data latency measurement yet. | Pending |
-| EXT-1 | Real email, Stripe, Groq/MCP provider behavior verified | Resend and Stripe webhook adapters are present; no real provider sandbox run or complete Groq/MCP workflow has been verified. | Pending |
+| EXT-1 | Real email, Stripe, Groq/MCP provider behavior verified | One direct Groq chat-completions request returned HTTP 200, verifying connectivity only. Full Copilot workflow, live Stripe sandbox checkout, email delivery, and external MCP client certification remain unverified. | Pending |
 
 ## Scope interpretation
 
@@ -39,10 +39,13 @@ The source brief explicitly requires the subscription lifecycle, recurring invoi
 
 ## Verification record
 
-- `make verify` — passed: Go tests, race detector, `go vet`, TypeScript typecheck, current lint alias, and production build.
+- `make verify` — passed after the latest implementation changes: Go tests, race detector, `go vet`, TypeScript typecheck, current lint alias (also TypeScript typecheck), and production build.
 - PostgreSQL HTTP billing flow passed in an isolated schema through Goose migration 005, including subscription close approval result and MCP grant create/read/revoke persistence.
 - PostgreSQL invoice-period uniqueness test passed in an isolated schema.
 - Copilot tool, approval execution/staleness/idempotency, cancellation, export filter/CSV/HTML, and MCP OAuth/Streamable HTTP tests passed.
 - Local API smoke exercised signup, CSRF rejection, product/customer/plan/discount/quotation/subscription creation, billing, immutable invoice evidence, confirmation, payment, report integrity, ZIP export, and a second business with an empty product list — passed after the empty-list and discount request-shape fixes.
 - Frontend typecheck, current lint alias, and production build passed after Copilot approval-result UI changes; see [history](history.md).
-- Browser UI walkthrough — not run; `agent-browser` could not start its daemon and the browser access host was unavailable.
+- Stripe Checkout and webhook unit tests passed; isolated-schema PostgreSQL tests ran through migrations 006–007. No live Stripe call was made.
+- `agent-browser` scans of all 17 application routes at desktop/tablet/mobile widths reported no horizontal overflow and zero Axe violations after the contrast/navigation fixes. Report tabs/date filters and mobile Escape/focus-return behavior were exercised. Full role-based workflow acceptance remains open.
+- One direct Groq chat-completions request returned HTTP 200; it did not exercise the complete Copilot tool loop.
+- `git diff --check` and OpenAPI YAML parsing passed after the latest documentation/API changes.

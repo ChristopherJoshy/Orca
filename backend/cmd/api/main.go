@@ -47,6 +47,7 @@ func main() {
 		PublicURL:           env("ORCA_PUBLIC_URL", "http://localhost:5173"),
 		GroqAPIKey:          os.Getenv("GROQ_API_KEY"),
 		GroqModel:           env("GROQ_MODEL", "openai/gpt-oss-120b"),
+		StripeAPIKey:        os.Getenv("STRIPE_SECRET_KEY"),
 		StripeWebhookSecret: os.Getenv("STRIPE_WEBHOOK_SECRET"),
 	})
 	server := &http.Server{Addr: env("ORCA_ADDR", ":8080"), Handler: api, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 60 * time.Second, IdleTimeout: 60 * time.Second}

@@ -15,4 +15,4 @@ Required checks are mapped in [requirements.md](requirements.md). A successful c
 
 ## Evidence discipline
 
-Record exact command, environment, seed size, result, and known limitation in `docs/history.md`. Never use live charges or send customer messages during tests. Use provider test/sandbox mode with disposable data. External email, payment, and Groq behavior remains unverified until an explicit test run produces evidence.
+Record exact command, environment, seed size, result, and known limitation in `docs/history.md`. Never use live charges or send customer messages during tests. Use provider test/sandbox mode with disposable data. The direct Groq connectivity smoke is not a full Copilot workflow, and Stripe adapter tests do not replace a live test-mode checkout. Email delivery and those end-to-end provider workflows remain unverified.

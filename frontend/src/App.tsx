@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
-import { apiRequest } from './api';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react';
+import { ApiError, apiRequest } from './api';
 import { Icon, type IconName } from './icons';
 import { addMoney, fromPaise, money, multiplyMoney, outstanding, toPaise, type Approval, type Invoice, type TaxRule, type WorkspaceData } from './model';
 import type { PageActions, PageKey } from './pages';
@@ -50,6 +50,32 @@ function responseId(response: unknown, fallback: string) {
   const nested = [outer.product, outer.plan, outer.customer, outer.subscription, outer.quotation, outer.discount, outer.staff, outer.tax, outer.invoice, outer.data]
     .find((value) => value && typeof value === 'object') as Record<string, unknown> | undefined;
   return String(outer.id ?? nested?.id ?? fallback);
+}
+
+function checkoutDestination(value: unknown): string {
+  const invalidResponse = () => new Error('Could not start a secure checkout. Try again or contact the business.');
+  if (!value || typeof value !== 'object') throw invalidResponse();
+  const response = value as Record<string, unknown>;
+  const amount = response.amount;
+  if (typeof response.sessionId !== 'string' || !response.sessionId.trim() || typeof amount !== 'string' || !/^(?:0|[1-9]\d*)\.\d{2}$/.test(amount) || toPaise(amount) <= 0n || response.currency !== 'INR' || typeof response.url !== 'string') {
+    throw invalidResponse();
+  }
+  let destination: URL;
+  try { destination = new URL(response.url); } catch { throw invalidResponse(); }
+  if (destination.origin !== 'https://checkout.stripe.com' || destination.username || destination.password) throw invalidResponse();
+  return destination.href;
+}
+
+function onlinePaymentFailure(error: unknown): string {
+  if (error instanceof ApiError) {
+    if (error.status === 401) return 'Session expired. Sign in again and retry.';
+    if (error.status === 403) return 'This invoice cannot be paid online from this account.';
+    if (error.status === 409) return 'The invoice balance changed. Refresh and retry.';
+    if (error.status === 503) return 'Online payments are not configured for this business. Contact them to arrange payment.';
+    return 'Could not start online payment. Try again.';
+  }
+  if (error instanceof TypeError) return 'Could not connect to online payments. Check your connection and try again.';
+  return error instanceof Error ? error.message : 'Could not start online payment. Try again.';
 }
 
 function initials(name: string) { return name.split(/\s+/).map((part) => part[0]).join('').slice(0, 2).toUpperCase(); }
@@ -165,12 +191,16 @@ export default function App() {
   const [route, setRoute] = useState<Route>(() => routeFromLocation());
   const [search, setSearch] = useState('');
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [isMobileViewport, setIsMobileViewport] = useState(() => window.matchMedia('(max-width: 700px)').matches);
+  const mobileMenuButtonRef = useRef<HTMLButtonElement>(null);
+  const sidebarRef = useRef<HTMLElement>(null);
+  const wasMobileNavOpen = useRef(false);
   const [newMenuOpen, setNewMenuOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [recordDialog, setRecordDialog] = useState<CreateKind | null>(null);
   const [paymentInvoice, setPaymentInvoice] = useState<Invoice | null>(null);
   const [signInOpen, setSignInOpen] = useState(false);
-  const [profile, setProfile] = useState<{ name: string; email: string; role: string; businessName: string }>({ name: 'Morgan Ellis', email: 'morgan@brightloop.example', role: 'admin', businessName: 'Brightloop Software' });
+  const [profile, setProfile] = useState<{ name: string; email: string; role: string; businessName: string }>({ name: 'Morgan Ellis', email: 'morgan@brightloop.example', role: 'unknown', businessName: 'Brightloop Software' });
   const [review, setReview] = useState<{ title: string; description: string; target: string; actionLabel: string; onApprove: () => Promise<boolean> } | null>(null);
   const [copilotBusy, setCopilotBusy] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -178,6 +208,41 @@ export default function App() {
   useEffect(() => {
     try { localStorage.removeItem('orca-copilot-messages'); } catch { /* No local conversation is treated as a completed agent run. */ }
   }, []);
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 700px)');
+    const updateViewport = () => {
+      setIsMobileViewport(media.matches);
+      if (!media.matches) setMobileNavOpen(false);
+    };
+    updateViewport();
+    media.addEventListener('change', updateViewport);
+    return () => media.removeEventListener('change', updateViewport);
+  }, []);
+  useLayoutEffect(() => {
+    const sidebar = sidebarRef.current;
+    if (!sidebar) return;
+    if (isMobileViewport && !mobileNavOpen) sidebar.setAttribute('inert', '');
+    else sidebar.removeAttribute('inert');
+  }, [isMobileViewport, mobileNavOpen]);
+  useEffect(() => {
+    if (!isMobileViewport) {
+      wasMobileNavOpen.current = false;
+      return;
+    }
+    if (mobileNavOpen) {
+      wasMobileNavOpen.current = true;
+      sidebarRef.current?.querySelector<HTMLElement>('button:not(:disabled), a[href], input:not(:disabled)')?.focus();
+      const closeOnEscape = (event: KeyboardEvent) => {
+        if (event.key === 'Escape') { event.preventDefault(); setMobileNavOpen(false); }
+      };
+      document.addEventListener('keydown', closeOnEscape);
+      return () => document.removeEventListener('keydown', closeOnEscape);
+    }
+    if (wasMobileNavOpen.current) {
+      wasMobileNavOpen.current = false;
+      mobileMenuButtonRef.current?.focus();
+    }
+  }, [isMobileViewport, mobileNavOpen]);
   useEffect(() => {
     if (apiState !== 'online' || dataMode !== 'workspace') return;
     let active = true;
@@ -263,6 +328,20 @@ export default function App() {
     openReview('Queue invoice email', `Queue ${invoice.number} delivery to ${customer?.name ?? 'the customer'} at ${customer?.email ?? 'their account email'}. This records a delivery request; email delivery is not confirmed here.`, invoice.number, 'Queue email request', () => commit(`/invoices/${encodeURIComponent(invoice.id)}/send`, {}, () => undefined));
   };
   const openPayment = (invoice: Invoice) => setPaymentInvoice(invoice);
+  const payOnline = async (invoice: Invoice) => {
+    if (apiState !== 'online' || dataMode !== 'workspace' || profile.role !== 'customer') {
+      throw new Error('Sign in to a customer account to pay an invoice online.');
+    }
+    if (invoice.status !== 'Confirmed' || toPaise(outstanding(invoice)) <= 0n) {
+      throw new Error('This invoice has no confirmed outstanding balance to pay.');
+    }
+    try {
+      const response = await apiRequest<unknown>(`/portal/invoices/${encodeURIComponent(invoice.id)}/checkout`, { method: 'POST' });
+      window.location.assign(checkoutDestination(response));
+    } catch (error) {
+      throw new Error(onlinePaymentFailure(error));
+    }
+  };
   const transitionSubscription = (subscriptionId: string, action: string) => {
     const item = data.subscriptions.find((subscription) => subscription.id === subscriptionId);
     if (!item) return;
@@ -443,7 +522,7 @@ export default function App() {
   });
 
   const actions: PageActions = {
-    navigate, create, confirmInvoice, cancelInvoice, sendInvoice, openPayment, transitionSubscription, convertQuotation, exportData, downloadExport, decideApproval, search, setSearch,
+    navigate, create, confirmInvoice, cancelInvoice, sendInvoice, openPayment, payOnline, transitionSubscription, convertQuotation, exportData, downloadExport, decideApproval, search, setSearch,
     sendQuotation: (id: string) => {
       const quote = data.quotations.find((item) => item.id === id); if (!quote) return;
       const customer = data.customers.find((item) => item.id === quote.customerId);
@@ -451,6 +530,9 @@ export default function App() {
     },
   };
 
+  const isCustomer = dataMode === 'workspace' && profile.role === 'customer';
+  const canManageInvoices = dataMode !== 'workspace' || ['admin', 'staff'].includes(profile.role);
+  const canPayOnline = isCustomer && apiState === 'online';
   const page = (() => {
     switch (route.page) {
       case 'overview': return <OverviewPage data={data} actions={actions} />;
@@ -460,7 +542,7 @@ export default function App() {
       case 'quotations': return <QuotationsPage data={data} actions={actions} />;
       case 'subscriptions': return <SubscriptionsPage data={data} actions={actions} />;
       case 'invoices': return <InvoicesPage data={data} actions={actions} />;
-      case 'invoice': return <InvoiceTruthPage data={data} invoiceId={route.id ?? ''} businessName={dataMode === 'workspace' ? profile.businessName : 'Brightloop Software'} actions={actions} />;
+      case 'invoice': return <InvoiceTruthPage data={data} invoiceId={route.id ?? ''} businessName={dataMode === 'workspace' ? profile.businessName : 'Brightloop Software'} actions={actions} isCustomer={isCustomer} canManageInvoices={canManageInvoices} canPayOnline={canPayOnline} />;
       case 'payments': return <PaymentsPage data={data} actions={actions} />;
       case 'reports': return <ReportsPage data={data} />;
       case 'discounts': return <DiscountsPage data={data} actions={actions} />;
@@ -468,7 +550,7 @@ export default function App() {
       case 'staff': return <StaffPage data={data} actions={actions} />;
       case 'exports': return <ExportsPage data={data} actions={actions} />;
       case 'copilot': return <CopilotPage data={data} messages={messages} onSend={sendCopilot} actions={actions} busy={copilotBusy} canRun={apiState === 'online' && dataMode === 'workspace'} canReview={apiState === 'online' && dataMode === 'workspace' && ['admin', 'staff'].includes(profile.role)} previewMode={dataMode === 'demo' || dataMode === 'auth-required' || apiState === 'offline'} />;
-      case 'portal': return <PortalPage data={data} actions={actions} />;
+      case 'portal': return <PortalPage data={data} actions={actions} isCustomer={isCustomer} canPayOnline={canPayOnline} />;
       default: return <SettingsPage actions={actions} />;
     }
   })();
@@ -477,10 +559,10 @@ export default function App() {
   const apiTone = apiState === 'offline' || dataMode === 'demo' || apiState === 'checking' ? 'amber' : dataMode === 'workspace' ? 'green' : 'neutral';
   const workspaceTitle = dataMode === 'workspace' ? profile.businessName : 'Brightloop Software · Demo';
   const userName = dataMode === 'workspace' ? profile.name : 'Morgan Ellis';
-  const userRole = dataMode === 'workspace' ? (profile.role === 'admin' ? 'Workspace admin' : profile.role === 'staff' ? 'Staff member' : 'Customer') : 'Demo workspace';
+  const userRole = dataMode === 'workspace' ? (profile.role === 'admin' ? 'Workspace admin' : profile.role === 'staff' ? 'Staff member' : profile.role === 'customer' ? 'Customer' : 'Checking access') : 'Demo workspace';
   const userInitials = dataMode === 'workspace' ? initials(profile.name || profile.email || 'Workspace') : 'ME';
   return <div className={`app-shell ${mobileNavOpen ? 'nav-open' : ''}`}>
-    <aside className="sidebar">
+    <aside id="orca-sidebar" className="sidebar" ref={sidebarRef} aria-label="Workspace sidebar" aria-hidden={isMobileViewport && !mobileNavOpen}>
       <button type="button" className="brand-lockup" onClick={() => navigate('overview')} aria-label="ORCA home"><span className="brand-mark"><Icon name="overview" size={19} /></span><span><strong>orca</strong><small>Billing workspace</small></span></button>
       <button className="workspace-switch" type="button"><span className="workspace-avatar">{workspaceTitle.slice(0, 1).toUpperCase()}</span><span><strong>{workspaceTitle}</strong><small>{dataMode === 'workspace' ? 'Business workspace' : 'Sample workspace'}</small></span><Icon name="chevron" size={15} /></button>
       <div className="side-section-label">WORKSPACE</div>
@@ -494,9 +576,9 @@ export default function App() {
       <button type="button" className="sidebar-profile" onClick={() => setProfileOpen(!profileOpen)}><Avatar initials={userInitials} size="sm" /><span><strong>{userName}</strong><small>{userRole}</small></span><Icon name="more" size={16} /></button>
       {profileOpen && <div className="profile-popover"><button type="button" onClick={() => navigate('portal')}>{dataMode === 'workspace' && profile.role === 'customer' ? 'Customer portal' : 'Customer portal preview'}</button><button type="button" onClick={() => navigate('settings')}>Workspace settings</button>{dataMode === 'workspace' ? <button type="button" onClick={() => void signOut()}>Sign out</button> : <button type="button" onClick={() => setSignInOpen(true)}>Sign in / switch workspace</button>}</div>}
     </aside>
-    {mobileNavOpen && <button className="nav-scrim" aria-label="Close navigation" onClick={() => setMobileNavOpen(false)} />}
+    {mobileNavOpen && <button type="button" className="nav-scrim" aria-label="Close navigation" onClick={() => setMobileNavOpen(false)} />}
     <div className="main-shell">
-      <header className="topbar"><div className="topbar-left"><IconButton icon="menu" label="Open navigation" className="mobile-menu-button" onClick={() => setMobileNavOpen(true)} /><div className="breadcrumb"><span>{dataMode === 'workspace' ? profile.businessName : 'Demo workspace'}</span><Icon name="chevron" size={14} /><strong>{pageTitles[route.page]}</strong></div></div><div className="topbar-actions"><label className="global-search"><Icon name="search" size={16} /><span className="sr-only">Search the current page</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search anything…" /><kbd>⌘ K</kbd></label><Badge tone={apiTone}>{apiLabel}</Badge>{apiState === 'online' && dataMode !== 'workspace' && <Button variant="outline" size="sm" onClick={() => setSignInOpen(true)}>Sign in</Button>}<div className="topbar-divider" /><IconButton icon="bell" label="Open Copilot approvals" onClick={() => navigate('copilot')} /><div className="top-avatar"><Avatar initials={userInitials} size="sm" /></div><div className="new-menu-wrap"><Button variant="primary" size="sm" icon="plus" onClick={() => setNewMenuOpen(!newMenuOpen)}>New</Button>{newMenuOpen && <div className="new-menu">{(['customer', 'product', 'plan', 'quotation', 'subscription'] as const).map((kind) => <button type="button" key={kind} onClick={() => { setNewMenuOpen(false); create(kind); }}>{`New ${kind}`}</button>)}</div>}</div></div></header>
+      <header className="topbar"><div className="topbar-left"><button ref={mobileMenuButtonRef} type="button" className="icon-button mobile-menu-button" aria-label="Open navigation" aria-expanded={mobileNavOpen} aria-controls="orca-sidebar" onClick={() => setMobileNavOpen(true)}><Icon name="menu" size={18} /></button><div className="breadcrumb"><span>{dataMode === 'workspace' ? profile.businessName : 'Demo workspace'}</span><Icon name="chevron" size={14} /><strong>{pageTitles[route.page]}</strong></div></div><div className="topbar-actions"><label className="global-search"><Icon name="search" size={16} /><span className="sr-only">Search the current page</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search anything…" /><kbd>⌘ K</kbd></label><Badge tone={apiTone}>{apiLabel}</Badge>{apiState === 'online' && dataMode !== 'workspace' && <Button variant="outline" size="sm" onClick={() => setSignInOpen(true)}>Sign in</Button>}<div className="topbar-divider" /><IconButton icon="bell" label="Open Copilot approvals" onClick={() => navigate('copilot')} /><div className="top-avatar"><Avatar initials={userInitials} size="sm" /></div><div className="new-menu-wrap"><Button variant="primary" size="sm" icon="plus" onClick={() => setNewMenuOpen(!newMenuOpen)}>New</Button>{newMenuOpen && <div className="new-menu">{(['customer', 'product', 'plan', 'quotation', 'subscription'] as const).map((kind) => <button type="button" key={kind} onClick={() => { setNewMenuOpen(false); create(kind); }}>{`New ${kind}`}</button>)}</div>}</div></div></header>
       <main className="page-content"><div className="content-wrap">{page}</div><footer className="app-footer"><span>ORCA · Billing workspace</span><span>Private workspace · INR</span></footer></main>
     </div>
     {recordDialog && <CreateRecordDialog kind={recordDialog} data={data} onClose={() => setRecordDialog(null)} onSave={(values) => saveRecord(recordDialog, values)} />}

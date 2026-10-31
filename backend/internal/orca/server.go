@@ -28,6 +28,7 @@ type ServerConfig struct {
 	PublicURL           string
 	GroqAPIKey          string
 	GroqModel           string
+	StripeAPIKey        string
 	StripeWebhookSecret string
 }
 
@@ -39,6 +40,7 @@ type API struct {
 	limits       map[string]rateWindow
 	agentMu      sync.Mutex
 	agentCancels map[string]context.CancelFunc
+	stripe       stripeCheckoutSessionCreator
 }
 type rateWindow struct {
 	start time.Time
@@ -51,7 +53,12 @@ type apiError struct {
 }
 
 func NewAPI(store *Store, config ServerConfig) http.Handler {
+	return newAPI(store, config).mux
+}
+
+func newAPI(store *Store, config ServerConfig) *API {
 	a := &API{Store: store, Config: config, limits: map[string]rateWindow{}, agentCancels: map[string]context.CancelFunc{}}
+	a.stripe = stripeCheckoutSessionCreatorHTTP{apiKey: config.StripeAPIKey, endpoint: stripeCheckoutSessionsEndpoint, client: &http.Client{Timeout: 15 * time.Second}}
 	r := chi.NewRouter()
 	r.Use(a.securityHeaders)
 	r.Get("/api/v1/health", a.health)
@@ -112,6 +119,7 @@ func NewAPI(store *Store, config ServerConfig) http.Handler {
 	r.Post("/api/v1/invoices/{id}/cancel", a.protected(true, a.cancelInvoice))
 	r.Post("/api/v1/invoices/{id}/send", a.protected(true, a.sendInvoice))
 	r.Post("/api/v1/invoices/{id}/payments", a.protected(true, a.recordPayment))
+	r.Post("/api/v1/portal/invoices/{id}/checkout", a.protected(true, a.createPortalCheckout))
 	r.Get("/api/v1/reports/summary", a.protected(false, a.reportSummary))
 	r.Post("/api/v1/exports", a.protected(true, a.requestExport))
 	r.Get("/api/v1/exports/{id}", a.protected(false, a.getExport))
@@ -125,7 +133,7 @@ func NewAPI(store *Store, config ServerConfig) http.Handler {
 	a.RegisterMCPRoutes(r)
 	r.Post("/api/v1/webhooks/stripe", a.stripeWebhook)
 	a.mux = r
-	return r
+	return a
 }
 
 func (a *API) securityHeaders(next http.Handler) http.Handler {

@@ -189,6 +189,30 @@ paths:
       parameters: [{ $ref: '#/components/parameters/Id' }]
       responses:
         '201': { description: Payment allocation recorded }
+  /portal/invoices/{id}/checkout:
+    post:
+      summary: Create or reuse a hosted Stripe Checkout session for the customer's own confirmed invoice
+      description: The amount is derived server-side from the current outstanding balance. The payment is posted only from a verified Stripe webhook, never from the redirect.
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      responses:
+        '200':
+          description: Existing or newly created Checkout session
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [sessionId, url, amount, currency]
+                properties:
+                  sessionId: { type: string }
+                  url: { type: string, format: uri }
+                  amount: { $ref: '#/components/schemas/Money' }
+                  currency: { type: string, const: INR }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '502': { description: Stripe Checkout session could not be created or safely validated }
+        '503': { description: Stripe Checkout is not configured }
   /billing/run:
     post:
       summary: Generate due draft invoices and advance billing cursors
